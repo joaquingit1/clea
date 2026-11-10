@@ -22,7 +22,7 @@ dependencies = ["slack_sdk>=3.30"]
 
 [project.optional-dependencies]
 api = ["anthropic>=0.40"]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=9.2.0", "ruff>=0.6"]
 
 [project.urls]
 Repository = "https://github.com/joaquingit1/clea"
