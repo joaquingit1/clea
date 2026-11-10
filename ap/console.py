@@ -1527,6 +1527,20 @@ def _refresh_loop() -> None:
         time.sleep(SNAP_EVERY)
 
 
+def _warm_setup() -> None:
+    """Run the setup screen's probes once (the CLIs' versions and sign-ins, the Keychain), so the first screen the
+    app shows is answered from memory instead of waiting 3 to 4 s for them."""
+    try:
+        from . import providers, setup
+        # the three slow ones side by side; state() then finds them answered or waits for the same probes
+        ts = [threading.Thread(target=f, daemon=True, name="console-warm-probe") for f in (providers.claude_cli, providers.codex_cli, setup._gh_cli)]
+        for t in ts:
+            t.start()
+        setup.state()
+    except Exception as e:
+        log("console: setup warm-up failed", err=str(e)[:200])
+
+
 def serve_once() -> None:
     if getattr(_S, "started", False):
         srv = getattr(_S, "srv", None)
@@ -1550,5 +1564,6 @@ def serve_once() -> None:
         _S.srv = srv
         threading.Thread(target=srv.serve_forever, name="console-http", daemon=True).start()
         log("console serving", url=f"http://127.0.0.1:{PORT}")
+        threading.Thread(target=_warm_setup, name="console-warm", daemon=True).start()
     except OSError as e:
         log("console port busy", err=str(e)[:80])

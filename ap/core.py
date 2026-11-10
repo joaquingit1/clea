@@ -309,3 +309,71 @@ def read_prompt(rel: str, **subs) -> str:
     for k, v in subs.items():
         text = text.replace("{{" + k + "}}", str(v))
     return text
+
+
+class Probes:
+    """Answers that cost a subprocess or a network call (is `gh` signed in, which channels exist), kept so a screen
+    never waits for them twice. The first read of a key waits for its probe, and a second reader that arrives
+    meanwhile waits for that same probe instead of running another. After that a read returns the last answer at
+    once and, when that answer is older than its age, a thread fetches a new one for the next read. The setup screen
+    asked for six of these on every request and took 3 s cold, 14 s next to a busy worker."""
+
+    def __init__(self):
+        self.vals: dict = {}
+        self.busy: set = set()
+        self.first: dict = {}
+        self.gen = 0
+        self.lock = threading.Lock()
+
+    def get(self, key: str, ttl: float, fn):
+        mine = start = False
+        with self.lock:
+            hit, gen = self.vals.get(key), self.gen
+            if hit is None:
+                wait = self.first.get(key)
+                if wait is None:
+                    wait, mine = threading.Event(), True
+                    self.first[key] = wait
+            elif time.time() - hit[0] >= ttl and key not in self.busy:
+                start = True
+                self.busy.add(key)
+        if hit is not None:
+            if start:
+                threading.Thread(target=self._refresh, args=(key, fn, gen), daemon=True, name=f"probe-{key}").start()
+            return hit[1]
+        if not mine:
+            wait.wait(90)
+            with self.lock:
+                hit = self.vals.get(key)
+            return hit[1] if hit is not None else fn()  # the first reader's probe failed: this one asks for itself
+        try:
+            val = fn()
+            with self.lock:
+                if gen == self.gen:
+                    self.vals[key] = (time.time(), val)
+            return val
+        finally:
+            with self.lock:
+                self.first.pop(key, None)
+            wait.set()
+
+    def _refresh(self, key: str, fn, gen: int) -> None:
+        try:
+            val = fn()
+        except Exception as e:  # the last answer stands; the next read tries again
+            log("probe: refresh failed", key=key, err=str(e)[:200])
+            val = None
+        with self.lock:
+            self.busy.discard(key)
+            if val is not None and gen == self.gen:  # a clear() while it ran means its answer is about the old state
+                self.vals[key] = (time.time(), val)
+
+    def clear(self) -> None:
+        with self.lock:
+            self.vals.clear()
+            self.gen += 1
+
+    def pop(self, key: str, default=None):
+        with self.lock:
+            self.gen += 1
+            return self.vals.pop(key, default)

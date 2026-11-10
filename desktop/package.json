@@ -1,13 +1,14 @@
 {
   "name": "clea",
   "productName": "Clea",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Clea, an engineering agent that works alongside you",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
     "pack": "electron-packager . Clea --platform=darwin --arch=arm64 --out=out --overwrite --icon=build/icon.icns --app-bundle-id=com.joaquincastellano.clea --helper-bundle-id=com.joaquincastellano.clea.helper --app-copyright=\"© 2026 Joaquin Castellano\" --app-category-type=public.app-category.productivity --ignore=^/out --ignore=^/build --ignore=^/tools --prune=true --osx-sign.identity=\"$CLEA_SIGN_IDENTITY\"",
+    "release": "zsh release.sh",
     "install-app": "npm run pack && rm -rf ~/Applications/Clea.app ~/Applications/Autopilot.app && cp -R out/Clea-darwin-arm64/Clea.app ~/Applications/"
   },
   "devDependencies": {

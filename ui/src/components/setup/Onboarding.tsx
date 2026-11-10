@@ -75,12 +75,14 @@ export function Onboarding({ state }: { state: SetupState }) {
     );
 
   const Step = current === "review" ? null : STEPS[current];
+  const first = current === "welcome";
   return (
     <Window>
-      <div className="glass-strong page-in flex h-full max-h-[720px] w-full max-w-[1000px] overflow-hidden rounded-3xl">
-        <Rail state={state} current={current} onPick={goto} />
+      {/* the welcome is a small card on the window's axis; the steps after it get the rail and the full card */}
+      <div className={cx("glass-strong page-in flex w-full overflow-hidden rounded-3xl", first ? "max-h-full max-w-[480px]" : "h-full max-h-[720px] max-w-[1000px]")}>
+        {first ? null : <Rail state={state} current={current} onPick={goto} />}
         <div className="flex min-w-0 flex-1 flex-col">
-          <Progress state={state} current={current} onPick={goto} />
+          {first ? null : <Progress state={state} current={current} onPick={goto} />}
           <FrameProvider value={frame}>
             {/* one key per step: the step arrives with the app's entrance, and its fields start from what is saved */}
             <div key={current} className="page-in flex min-h-0 flex-1 flex-col">

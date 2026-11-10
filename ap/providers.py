@@ -26,7 +26,7 @@ import threading
 import time
 
 from . import site, vault
-from .core import CFG, PATH_PREFIX, VAR, env, log, save_config
+from .core import CFG, PATH_PREFIX, VAR, Probes, env, log, save_config
 
 PROVIDERS = [
     {"id": "claude-subscription", "vendor": "Anthropic", "engine": "claude", "auth": "subscription"},
@@ -40,7 +40,7 @@ KEY = {"claude": "anthropic-api-key", "codex": "openai-api-key"}
 # credentials an engine would pick up from the environment by itself; each run keeps only its provider's
 CLAUDE_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN")
 EMPTY_MCP = '{"mcpServers":{}}'
-_cache: dict = {}
+_cache = Probes()
 _login: dict = {}
 
 
@@ -75,12 +75,7 @@ def selected_id() -> str:
 
 # ---- what each engine's own CLI says ------------------------------------------------------------------------------
 def _cached(key: str, ttl: float, fn):
-    hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
-        return hit[1]
-    val = fn()
-    _cache[key] = (time.time(), val)
-    return val
+    return _cache.get(key, ttl, fn)
 
 
 def refresh() -> None:
@@ -176,7 +171,7 @@ def state(pid: str) -> dict:
                                                       "Iniciá sesión en Codex con tu cuenta de ChatGPT. Pasa en Codex mismo.")}
     if pid == "openai-chatgpt":
         from . import siwc
-        st = siwc.status()
+        st = _cached("siwc", 15, siwc.status)
         if st["connected"]:
             return {**out, "ready": True, "account": st["email"], "plan": "ChatGPT",
                     "detail": _t("Using your ChatGPT plan.", "Usando tu plan de ChatGPT.")}
@@ -188,7 +183,7 @@ def state(pid: str) -> dict:
                 "detail": _t("Use your ChatGPT plan in Clea. You sign in on OpenAI's page and choose how much of your plan Clea may use.",
                              "Usá tu plan de ChatGPT en Clea. Iniciás sesión en la página de OpenAI y elegís cuánto de tu plan puede usar Clea.")}
     meta = _key_meta(eng)  # claude-api, openai-api
-    if vault.get(KEY[eng]) and meta.get("validated_at"):
+    if _cached(f"key:{eng}", 15, lambda: bool(vault.get(KEY[eng]))) and meta.get("validated_at"):
         return {**out, "ready": True, "account": meta.get("hint") or "", "plan": "API",
                 "detail": _t("API key saved and checked. Usage is billed to that key.", "API key guardada y verificada. El uso se cobra a esa key.")}
     who = "Anthropic" if eng == "claude" else "OpenAI"

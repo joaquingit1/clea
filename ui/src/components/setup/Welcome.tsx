@@ -73,10 +73,10 @@ export function WelcomeStep({ state }: { state: SetupState }) {
       </Field>
       <div>
         <p className="mb-1.5 text-[13px] font-medium text-fg">{t("welcome.language")}</p>
-        <Segmented name="lang" label={t("welcome.language")} value={lang} onChange={pick} options={LANGS} />
+        <Segmented name="lang" label={t("welcome.language")} value={lang} onChange={pick} options={LANGS} fill={onboarding} />
         {langError ? <ErrorText>{langError}</ErrorText> : null}
       </div>
-      {onboarding ? <p className="text-[12.5px] leading-snug text-fg-3">{t("welcome.time")}</p> : null}
+      {onboarding ? <p className="text-center text-[12.5px] leading-snug text-pretty text-fg-3">{t("welcome.time")}</p> : null}
     </StepFrame>
   );
 }

@@ -70,8 +70,21 @@ function Connect({ state, onDone, onKeep }: { state: SetupState; onDone: () => v
         </Guide>
         <Guide n={2} title={t("slack.guide.2.title")} body={t("slack.guide.2.body")} />
         <Guide n={3} title={t("slack.guide.3.title")} body={t("slack.guide.3.body")}>
+          {/* where the token is, as the path Slack's own pages name it, and a way back to the app if its tab was closed */}
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-fg-3">
+            {["api.slack.com/apps", "Clea", "OAuth & Permissions", "OAuth Tokens"].map((x) => (
+              <span key={x} className="contents">
+                <span>{x}</span>
+                <span aria-hidden>›</span>
+              </span>
+            ))}
+            <span className="rounded-md bg-hover px-1.5 py-0.5 font-medium text-fg-2">User OAuth Token</span>
+          </p>
+          <a href="https://api.slack.com/apps" target="_blank" rel="noreferrer" className={cx(BTN.secondary, "mt-2.5")}>
+            {t("slack.guide.3.action")} <ArrowUpRight size={13} className="opacity-60" />
+          </a>
           <div className="mt-3 space-y-4">
-            <Field label={t("slack.userToken")} error={say("user")}>
+            <Field label={t("slack.userToken")} error={say("user")} hint={t("slack.guide.3.kept")}>
               {(p) => (
                 <SecretInput
                   {...p}

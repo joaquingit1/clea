@@ -44,7 +44,7 @@ export function StepFrame({
 }: {
   title: string;
   lead: ReactNode;
-  /** an illustration above a centered title (the welcome step) */
+  /** an illustration above a centered title: the step is then a centered card of its own (the welcome step) */
   hero?: ReactNode;
   children: ReactNode;
   save?: () => Promise<void | "stay">;
@@ -150,18 +150,40 @@ export function StepFrame({
     );
   }
 
+  // A step with a hero (the welcome) is a card of its own: one column on the card's axis, with its button under the
+  // fields at their width. No rail beside it and no footer bar, so nothing pulls it off center.
+  if (hero) {
+    return (
+      <form ref={form} onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="m-auto w-full max-w-[400px] px-6 py-9 sm:px-0 sm:py-11">
+          <header className="flex flex-col items-center text-center">
+            <div className="mb-5">{hero}</div>
+            <h1 className="text-[24px] leading-[1.875rem] font-semibold tracking-[-0.02em] text-balance">{title}</h1>
+            <p className="mt-2 text-[14px] leading-[1.5] text-pretty text-fg-2">{lead}</p>
+          </header>
+          <div data-step-body className="mt-7 space-y-6">
+            {children}
+          </div>
+          <button type="submit" disabled={!ready || busy || !save} className={cx(BTN.primary, "mt-7 h-10 w-full")}>
+            {busy ? <Spinner size={13} className="text-white" /> : null}
+            {submit ?? t("common.continue")}
+          </button>
+          {note ? <div className="mt-2.5 text-center">{note}</div> : null}
+        </div>
+      </form>
+    );
+  }
+
   return (
     <form ref={form} onSubmit={onSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
-      <div className={cx("min-h-0 flex-1 overflow-y-auto", !!hero && "flex flex-col")}>
-        {/* a step with a hero is short: it sits in the middle of the card (my-auto), and still scrolls when the window is small */}
-        <div className={cx("mx-auto w-full px-5 pt-6 pb-7 sm:px-10 sm:pt-9", wide ? "max-w-[720px]" : "max-w-[640px]", !!hero && "my-auto sm:pb-12")}>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className={cx("mx-auto w-full px-5 pt-6 pb-7 sm:px-10 sm:pt-9", wide ? "max-w-[720px]" : "max-w-[640px]")}>
           {f.sentBack ? <p className="mb-4 rounded-xl bg-amber-soft px-3 py-2 text-[13px] text-amber">{t("review.sentBack")}</p> : null}
-          <header className={cx(!!hero && "flex flex-col items-center text-center")}>
-            {hero ? <div className="mb-5">{hero}</div> : null}
+          <header>
             <h1 className="text-[24px] leading-[1.875rem] font-semibold tracking-[-0.02em] text-balance">{title}</h1>
-            <p className={cx("mt-2 text-[14px] leading-[1.5] text-pretty text-fg-2", !!hero && "max-w-[460px]")}>{lead}</p>
+            <p className="mt-2 text-[14px] leading-[1.5] text-pretty text-fg-2">{lead}</p>
           </header>
-          <div data-step-body className={cx("mt-7 space-y-7", !!hero && "mx-auto max-w-[380px]")}>
+          <div data-step-body className="mt-7 space-y-7">
             {children}
           </div>
         </div>

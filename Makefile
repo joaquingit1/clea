@@ -1,14 +1,15 @@
-# Clea from a checkout. `make install` once, then `make run` (your accounts) or `make demo` (no accounts).
+# Clea from a checkout. `make install` once, then `make run` (your accounts, in Clea's own window) or `make demo`
+# (no accounts). People who only want to use it download Clea.app from the releases page instead.
 PY ?= python3
 BIN := .venv/bin
 CLEA_HOME ?= $(HOME)/Library/Application Support/Clea/install
 export CLEA_HOME
 
-.PHONY: help install engine app run demo test sim desktop clean
+.PHONY: help install engine app window run serve demo test sim dmg clean
 help:  ## what each target does
 	@grep -E '^[a-z]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
 
-install: engine app  ## everything a first run needs: the engine and the app's screen
+install: engine app window  ## everything a first run needs: the engine, the app's screen and its window
 
 engine:  ## the Python engine, in .venv
 	$(PY) -m venv .venv
@@ -17,7 +18,13 @@ engine:  ## the Python engine, in .venv
 app:  ## build the app's screen (ui/dist)
 	cd ui && if command -v pnpm >/dev/null; then pnpm install --frozen-lockfile && pnpm build; else npm install && npm run build; fi
 
-run:  ## start Clea on this Mac: the worker, the guard and the app on http://127.0.0.1:4848
+window:  ## the native window's dependencies (Electron)
+	cd desktop && npm ci --no-audit --no-fund
+
+run:  ## open Clea: its own window, which starts the engine and stops it when you quit
+	cd desktop && CLEA_ENGINE="$(CURDIR)" npx electron .
+
+serve:  ## the engine alone (worker and guard), with the app in a browser at http://127.0.0.1:4848
 	$(BIN)/clea run
 
 demo:  ## the app on a simulated workspace: no Slack, GitHub or model account needed
@@ -29,8 +36,8 @@ test:  ## the unit tests
 sim:  ## every simulated scenario, on the scripted model
 	env -u CLEA_HOME $(BIN)/python -m sim
 
-desktop:  ## the native window, running this checkout's engine
-	cd desktop && npm install && CLEA_ENGINE="$(CURDIR)" npm start
+dmg:  ## build the download: Clea.app with the engine and its own Python inside, and a disk image (desktop/out)
+	zsh desktop/release.sh
 
 clean:  ## remove what install built
 	rm -rf .venv ui/dist ui/node_modules desktop/node_modules desktop/out *.egg-info

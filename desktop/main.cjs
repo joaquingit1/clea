@@ -16,7 +16,7 @@ require("node:module").enableCompileCache?.(); // V8 code cache for the main pro
 const { app, BrowserWindow, Menu, Notification, ipcMain, nativeTheme, net, protocol, screen, shell } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { execFile, spawn } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 
 const API = process.env.CLEA_API || "http://127.0.0.1:4848";
@@ -53,8 +53,26 @@ let engine = null;
 let quitting = false;
 let engineFails = 0;
 
+/** The PATH the user's terminal has. Started from the Finder the app gets a bare one, and the folders above miss a
+ *  tool that a shell profile puts elsewhere (node under nvm, volta or mise, and with it `claude` or `codex`): the
+ *  setup would say "not installed" for something that runs fine in a terminal. Asked once from a login shell, with a
+ *  short wait; when the shell does not answer, the known folders stand. */
+let shellPathOnce = null;
+function shellPath() {
+  shellPathOnce ??= new Promise((done) => {
+    const sh = process.env.SHELL && fs.existsSync(process.env.SHELL) ? process.env.SHELL : "/bin/zsh";
+    execFile(sh, ["-ilc", 'printf "__CLEA_PATH__%s__CLEA_PATH__" "$PATH"'], { timeout: 5000, encoding: "utf8" }, (_err, out) => {
+      const m = /__CLEA_PATH__([^\n]*?)__CLEA_PATH__/.exec(out || "");
+      done(m ? m[1] : "");
+    });
+  });
+  return shellPathOnce;
+}
+
 function enginePython() {
-  const found = [process.env.CLEA_PYTHON, path.join(ENGINE, ".venv", "bin", "python"), path.join(ENGINE, "venv", "bin", "python")].find(
+  // the packaged app ships its own Python (Resources/python, see desktop/release.sh); a checkout uses its venv
+  const bundled = process.resourcesPath ? path.join(process.resourcesPath, "python", "bin", "python3") : null;
+  const found = [process.env.CLEA_PYTHON, bundled, path.join(ENGINE, ".venv", "bin", "python"), path.join(ENGINE, "venv", "bin", "python")].find(
     (p) => p && fs.existsSync(p),
   );
   return found || "python3";
@@ -72,6 +90,7 @@ async function startEngine() {
   if (!ENGINE || engine || quitting) return;
   // something already answers there (the engine of an app that crashed, or one the user started by hand): use it
   if (await engineAnswers()) return;
+  const fromShell = await shellPath();
   const logs = path.join(INSTALL, "var", "log");
   fs.mkdirSync(logs, { recursive: true });
   const out = fs.openSync(path.join(logs, "engine.out"), "a");
@@ -85,7 +104,9 @@ async function startEngine() {
       CLEA_CODE: ENGINE,
       CLEA_PORT: new URL(API).port || "4848",
       PYTHONUNBUFFERED: "1",
-      PATH: `${TOOLS}:${process.env.PATH || "/usr/bin:/bin:/usr/sbin:/sbin"}`,
+      // compiled modules go to the install, never into the app bundle: writing there would break its signature
+      PYTHONPYCACHEPREFIX: path.join(INSTALL, "var", "pycache"),
+      PATH: [fromShell, TOOLS, process.env.PATH || "/usr/bin:/bin:/usr/sbin:/sbin"].filter(Boolean).join(":"),
     },
   });
   fs.closeSync(out);

@@ -16,7 +16,8 @@ export function Window({ children }: { children: ReactNode }) {
     <div className="relative isolate flex h-full flex-col overflow-hidden bg-bg">
       <Sky hidden={false} />
       <div data-drag className={cx("relative shrink-0", desktop ? "h-[46px]" : "h-3 sm:h-8")} />
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-3 sm:px-8 sm:pb-8">{children}</div>
+      {/* as much room under the content as the strip takes above it, so the content sits on the window's center */}
+      <div className={cx("relative flex min-h-0 flex-1 items-center justify-center px-3 sm:px-8", desktop ? "pb-[46px]" : "pb-3 sm:pb-8")}>{children}</div>
     </div>
   );
 }

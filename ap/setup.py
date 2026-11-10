@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 
 from . import providers, site, vault
-from .core import CFG, DATA, PATH_PREFIX, env, log, save_config
+from .core import CFG, DATA, PATH_PREFIX, Probes, env, log, save_config
 
 STEPS = ("welcome", "model", "slack", "code", "team", "tickets", "autonomy")
 OPTIONAL = ("tickets",)
@@ -36,7 +36,7 @@ SCOPES = {
     "chat:write": "post in your own DM and send the replies you approve", "reactions:read": "read your approvals by reaction",
     "files:read": "open screenshots and files in threads", "pins:write": "pin the board in your DM",
 }
-_cache: dict = {}
+_cache = Probes()
 _lock = threading.Lock()
 
 
@@ -59,12 +59,7 @@ def _done(step: str) -> None:
 
 
 def _cached(key: str, ttl: float, fn):
-    hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
-        return hit[1]
-    val = fn()
-    _cache[key] = (time.time(), val)
-    return val
+    return _cache.get(key, ttl, fn)
 
 
 # ---- state ---------------------------------------------------------------------------------------------------------
@@ -185,9 +180,14 @@ def slack_connect(user_token: str, app_token: str = "") -> dict:
     return slack_state()
 
 
+def _has(secret: str) -> bool:
+    """Whether the vault holds it, without a Keychain read (a subprocess) on every request of the setup screen."""
+    return _cached(f"secret:{secret}", 30, lambda: bool(vault.get(secret)))
+
+
 def slack_state() -> dict:
     sl = CFG.get("slack") or {}
-    connected = bool(CFG.get("self_user_id") and sl.get("team_id") and vault.get("slack-user-token")) or \
+    connected = bool(CFG.get("self_user_id") and sl.get("team_id") and _has("slack-user-token")) or \
         (site.internal() and bool(CFG.get("self_user_id")))
     names = CFG.get("channel_names") or {}
     chans = []
@@ -209,7 +209,7 @@ def slack_state() -> dict:
             "workspace": {"name": sl.get("workspace") or "", "url": sl.get("workspace_url") or "", "team_id": sl.get("team_id") or ""} if connected else None,
             "user": {"id": CFG.get("self_user_id") or "", "name": sl.get("user_name") or site.user_name()} if connected else None,
             "missing_scopes": sorted(set(SCOPES) - have) if have else [],
-            "socket": bool(sl.get("socket_mode") and (vault.get("slack-app-token") or site.internal())),
+            "socket": bool(sl.get("socket_mode") and (_has("slack-app-token") or site.internal())),
             "channels": chans, "usergroups": groups, "keywords": site.keywords(),
             "scan_dms": bool(sl.get("scan_dms", True)), "mentions": bool(sl.get("mentions", True)), "manifest_url": manifest_url()}
 

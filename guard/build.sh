@@ -7,7 +7,8 @@ cd "$(dirname "$0")"
 APP=Clea.app
 rm -rf $APP && mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
 swiftc -O -o $APP/Contents/MacOS/Clea ap_confirm.swift
-[ -f ../desktop/build/icon.icns ] && cp ../desktop/build/icon.icns $APP/Contents/Resources/Clea.icns
+ICON=${CLEA_ICON:-../desktop/build/icon.icns}
+[ -f "$ICON" ] && cp "$ICON" $APP/Contents/Resources/Clea.icns
 cat > $APP/Contents/Info.plist <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

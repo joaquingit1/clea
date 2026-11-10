@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/joaquingit1/clea/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/joaquingit1/clea/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/joaquingit1/clea/releases/latest"><img alt="Release 0.2.0" src="https://img.shields.io/badge/release-v0.2.0-2135f4?style=flat-square"></a>
+  <a href="https://github.com/joaquingit1/clea/releases/latest"><img alt="Release 0.2.1" src="https://img.shields.io/badge/release-v0.2.1-2135f4?style=flat-square"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache_2.0-2135f4?style=flat-square"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square">
 </p>
@@ -41,14 +41,23 @@
 
 ## Quickstart
 
+**Download the app.** Get `Clea-0.2.1-arm64.dmg` from the [latest release](https://github.com/joaquingit1/clea/releases/latest),
+drag Clea to Applications and open it. The engine and its own Python are inside: there is nothing else to install.
+The first run walks you through connecting your model, Slack, repositories and team, in the app's own window.
+
+It needs an Apple Silicon Mac, `git`, and the GitHub CLI signed in (`gh auth login`).
+
+> [!NOTE]
+> The download is not notarized by Apple yet, so macOS stops it the first time. Open it once, then go to
+> System Settings, Privacy & Security, and choose **Open Anyway**. [docs/setup.md](docs/setup.md#the-first-time-you-open-it) has the details.
+
+**Or run it from source** (Python 3.12+, Node 22+):
+
 ```
 git clone https://github.com/joaquingit1/clea && cd clea
 make install
 make run
 ```
-
-Open http://127.0.0.1:4848 and the first run walks you through connecting your model, Slack, repositories and team.
-It needs macOS, Python 3.12+, Node 22+ and the GitHub CLI signed in. Details in [docs/setup.md](docs/setup.md).
 
 **No accounts at hand?** `make demo` opens the app on a simulated workspace, with no Slack, GitHub or model connected.
 
@@ -170,8 +179,8 @@ that has to end as a draft pull request that fixes it. See [docs/simulator.md](d
 ## Status
 
 Clea is pre-1.0 and macOS only. It has done one developer's daily work for months; this is its first release for
-other teams. Run it from a checkout for now: a signed download is not available yet. Slack is the only messaging
-platform, and GitHub the only code host.
+other teams. The download runs on Apple Silicon and is not notarized yet. Slack is the only messaging platform,
+and GitHub the only code host.
 
 ## Contributing
 

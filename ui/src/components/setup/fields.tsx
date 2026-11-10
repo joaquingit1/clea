@@ -211,9 +211,10 @@ export function TagInput({ value, onChange, placeholder, label, upper }: { value
 }
 
 /** Two or three choices side by side; the highlight slides to the one picked. */
-export function Segmented<T extends string>({ value, onChange, options, label, name }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; label: string; name: string }) {
+/** `fill`: the control takes the width of its column and its choices share it equally. */
+export function Segmented<T extends string>({ value, onChange, options, label, name, fill }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; label: string; name: string; fill?: boolean }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex max-w-full gap-0.5 rounded-xl bg-hover p-0.5">
+    <div role="radiogroup" aria-label={label} className={cx("max-w-full gap-0.5 rounded-xl bg-hover p-0.5", fill ? "flex w-full" : "inline-flex")}>
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -223,7 +224,7 @@ export function Segmented<T extends string>({ value, onChange, options, label, n
             role="radio"
             aria-checked={on}
             onClick={() => onChange(o.value)}
-            className={cx("relative h-8 min-w-0 rounded-[10px] px-3 text-[13.5px] transition-colors sm:px-3.5", on ? "text-fg" : "text-fg-2 hover:text-fg")}
+            className={cx("relative h-8 min-w-0 rounded-[10px] px-3 text-[13.5px] transition-colors sm:px-3.5", fill && "flex-1", on ? "text-fg" : "text-fg-2 hover:text-fg")}
           >
             {on ? (
               <motion.span layoutId={`seg-${name}`} transition={{ type: "spring", duration: 0.3, bounce: 0.05 }} className="absolute inset-0 rounded-[10px] bg-panel shadow-[var(--shadow),0_0_0_0.5px_var(--line)]" />

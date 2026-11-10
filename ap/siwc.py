@@ -68,6 +68,8 @@ def record() -> dict:
 
 def _save(rec: dict) -> None:
     vault.put(RECORD, json.dumps(rec))
+    from . import providers
+    providers.refresh()  # the setup screen's last answer about this sign-in is about the old record
 
 
 def host_id() -> str:
