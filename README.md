@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/joaquingit1/clea/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/joaquingit1/clea/ci.yml?branch=main&style=flat-square&label=ci"></a>
-  <a href="https://github.com/joaquingit1/clea/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/joaquingit1/clea?style=flat-square&color=2135f4"></a>
+  <a href="https://github.com/joaquingit1/clea/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/joaquingit1/clea/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/joaquingit1/clea/releases/latest"><img alt="Release 0.2.0" src="https://img.shields.io/badge/release-v0.2.0-2135f4?style=flat-square"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache_2.0-2135f4?style=flat-square"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square">
 </p>
