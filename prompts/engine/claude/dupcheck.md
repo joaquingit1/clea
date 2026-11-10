@@ -1,0 +1,1 @@
+Two draft pull requests opened by {{user}}'s assistant touch the same file. Decide whether they are the SAME fix (same root cause, overlapping change; keeping both would conflict or repeat work) or DIFFERENT fixes that happen to share a file. Read both diffs. Answer through the schema with same=true/false and one sentence of why. When unsure, same=false.

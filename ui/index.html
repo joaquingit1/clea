@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- lang is the fallback only: src/i18n sets it to the app's language (cached from setup) as soon as it loads -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Clea" />
+    <meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Clea</title>
+    <style>
+      /* Startup: Clea's mark speaking (the waves leave the dot) until the app mounts. Same motion as .clea-mark in index.css. */
+      :root { --startup-ink: #2135f4; --startup-bg: #ffffff; }
+      @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --startup-ink: #8e9bff; --startup-bg: #141414; } }
+      :root[data-theme="dark"] { --startup-ink: #8e9bff; --startup-bg: #141414; }
+      html.desktop body { background: transparent; }
+      .clea-startup { position: fixed; inset: 0; display: grid; place-items: center; -webkit-app-region: drag; }
+      .clea-startup svg { width: 56px; height: 56px; fill: var(--startup-ink); opacity: 0; animation: clea-in 240ms ease-out 60ms forwards; overflow: visible; }
+      .clea-startup path { transform-box: view-box; transform-origin: 0 0; animation: clea-boot 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+      .clea-startup path:nth-child(2) { animation-delay: 0.22s; }
+      .clea-startup path:nth-child(1) { animation-delay: 0.44s; }
+      @keyframes clea-in { to { opacity: 1; } }
+      @keyframes clea-boot { 0%, 100% { opacity: 1; scale: 1; } 30% { opacity: 0.32; scale: 0.94; } 60% { opacity: 1; scale: 1.03; } }
+      @media (prefers-reduced-motion: reduce) { .clea-startup svg { animation: none; opacity: 1; } .clea-startup path { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="clea-startup" aria-label="Clea"><svg viewBox="-7 -7 14 14"><path d="M6.3246 -1.5A6.5 6.5 0 0 0 -6.5 0V6.5H0A6.5 6.5 0 0 0 6.3246 1.5H4.7697A5 5 0 0 1 0 5H-5V0A5 5 0 0 1 4.7697 -1.5Z"/><path d="M3.7081 -1.5A4 4 0 0 0 -4 0V4H0A4 4 0 0 0 3.7081 1.5H2A2.5 2.5 0 0 1 0 2.5H-2.5V0A2.5 2.5 0 0 1 2 -1.5Z"/><path d="M0 -1.5A1.5 1.5 0 1 1 0 1.5A1.5 1.5 0 1 1 0 -1.5Z"/></svg></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

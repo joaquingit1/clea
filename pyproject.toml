@@ -1,0 +1,47 @@
+[project]
+name = "clea"
+version = "0.2.0"
+description = "An engineering agent that works alongside one developer: it reads the Slack, GitHub and Jira you point it at, drafts your replies, investigates bugs and opens draft pull requests, and nothing leaves in your name without your approval."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Joaquin Castellano"}]
+keywords = ["ai-agents", "coding-agent", "developer-tools", "slack", "github", "jira", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+]
+dependencies = ["slack_sdk>=3.30"]
+
+[project.optional-dependencies]
+api = ["anthropic>=0.40"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.urls]
+Repository = "https://github.com/joaquingit1/clea"
+Issues = "https://github.com/joaquingit1/clea/issues"
+Changelog = "https://github.com/joaquingit1/clea/blob/main/CHANGELOG.md"
+
+[project.scripts]
+clea = "ap.cli:entry"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["ap"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"

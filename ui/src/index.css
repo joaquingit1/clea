@@ -1,0 +1,619 @@
+@import "tailwindcss";
+
+/* Clea's system. The base is Codex desktop's (extracted from /Applications/ChatGPT.app, 2026-10-20): neutral ink over
+   surface, hairline borders, the system font at weight 430, squircle corners, color only for meaning. Since the rebrand
+   (Clea Logo.pdf, 2026-10-23) the one brand color is the logo's ink, #2135F4: focus, running work, links and the mark.
+   Orange = needs you, green and red = outcome, purple = an action Clea took.
+   Every token is written once as light-dark(light, dark); data-theme pins color-scheme, so the switch flips all of them. */
+:root {
+  color-scheme: light dark;
+  --brand: #2135f4;
+  --brand-ink: light-dark(#2135f4, #8e9bff);
+  --brand-soft: light-dark(#e9ecff, #171c47);
+  --ease-wave: cubic-bezier(0.45, 0, 0.25, 1);
+  --bg: light-dark(#ffffff, #161616);
+  --sidebar: light-dark(#f6f6f7, #121212);
+  --panel: light-dark(#ffffff, #1e1e1f);
+  --elev: light-dark(rgba(255, 255, 255, 0.96), rgba(46, 46, 48, 0.96));
+  --hover: light-dark(rgba(26, 28, 31, 0.049), rgba(255, 255, 255, 0.052));
+  --active: light-dark(rgba(26, 28, 31, 0.078), rgba(255, 255, 255, 0.078));
+  --line: light-dark(rgba(26, 28, 31, 0.078), rgba(255, 255, 255, 0.084));
+  --line-light: light-dark(rgba(26, 28, 31, 0.049), rgba(255, 255, 255, 0.042));
+  --line-strong: light-dark(rgba(26, 28, 31, 0.117), rgba(255, 255, 255, 0.156));
+  --fg: light-dark(#1a1c1f, #e4e4e6);
+  --fg-2: light-dark(rgba(26, 28, 31, 0.695), rgba(255, 255, 255, 0.71));
+  --fg-3: light-dark(rgba(26, 28, 31, 0.495), rgba(255, 255, 255, 0.498));
+  --accent: var(--brand-ink);
+  --accent-soft: var(--brand-soft);
+  --amber: light-dark(#e25507, #ff8549);
+  --amber-soft: light-dark(#ffe7d9, #3d1b07);
+  --green: light-dark(#00a240, #40c977);
+  --green-soft: light-dark(color-mix(in oklab, #00a240 9%, transparent), color-mix(in oklab, #40c977 16%, transparent));
+  --red: light-dark(#e02e2a, #ff6764);
+  --red-soft: light-dark(#ffd9d9, #4d100e);
+  --blue: var(--brand-ink);
+  --blue-soft: var(--brand-soft);
+  --purple: light-dark(#924ff7, #ad7bf9);
+  --purple-soft: light-dark(color-mix(in oklab, #924ff7 10%, transparent), color-mix(in oklab, #ad7bf9 16%, transparent));
+  --user-msg: color-mix(in oklab, var(--fg) 5%, transparent);
+  --shimmer-base: light-dark(color-mix(in oklab, #1a1c1f 55%, transparent), color-mix(in oklab, #e4e4e6 45%, transparent));
+  --shimmer-hi: light-dark(#ffffffbf, #ffffff);
+  --shadow: 0 1px 2px -1px light-dark(#00000014, #00000040);
+  --shadow-lg: 0 16px 32px -8px light-dark(#00000030, #00000080), 0 0 0 0.5px var(--line-strong);
+  --composer: light-dark(color-mix(in oklab, #ffffff 90%, transparent), color-mix(in oklab, #2d2d2d 90%, transparent));
+  --elev-composer: inset 0 0 1px 0 light-dark(transparent, #fff3), 0 0 0 1px light-dark(#0000000a, transparent), 0 2px 8px 0 light-dark(#0000000a, transparent),
+    0 8px 32px -12px light-dark(transparent, #00000099), 0 4px 80px 8px light-dark(#00000006, transparent);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-panel: var(--panel);
+  --color-elev: var(--elev);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-line: var(--line);
+  --color-line-light: var(--line-light);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-purple: var(--purple);
+  --color-purple-soft: var(--purple-soft);
+  --color-user: var(--user-msg);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --ease-enter: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 430;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+  /* the page itself never scrolls or bounces: only the panes inside it do, and their overscroll stays in them
+ */
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-x-auto {
+    overscroll-behavior: contain;
+  }
+  b,
+  strong {
+    font-weight: 600;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  textarea:focus-visible,
+  input:focus-visible {
+    outline: none;
+  }
+}
+
+/* Codex scales every radius by 1.25 and draws it as a squircle where Chromium supports corner-shape */
+@supports (corner-shape: superellipse(1.5)) {
+  :where(*) {
+    corner-shape: superellipse(1.5);
+  }
+  .rounded-full {
+    corner-shape: round;
+  }
+}
+
+/* Codex's loading-shimmer: a band sweeps across the text in 48 steps every 2 s */
+.shimmer {
+  background: var(--shimmer-base)
+    linear-gradient(to right, transparent 0%, var(--shimmer-hi) 40%, var(--shimmer-hi) 60%, transparent 100%);
+  background-size: 50% 200%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: loading-shimmer 2s steps(48, end) infinite;
+}
+@keyframes loading-shimmer {
+  0% {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 250% 0;
+  }
+}
+
+/* Clea in the background (api.ts, awake): the endless loops hold still until the window is back in front (never a one-shot like fade-in, which would
+   stay at opacity 0) */
+html.away .shimmer,
+html.away .pulsing-dot,
+html.away .animate-spin,
+html.away .animate-pulse {
+  animation-play-state: paused;
+}
+
+.pulsing-dot {
+  animation: pulsing-dot 1.25s ease-in-out infinite;
+}
+@keyframes pulsing-dot {
+  0%,
+  to {
+    scale: 1;
+  }
+  50% {
+    scale: 1.25;
+  }
+}
+
+.fade-in {
+  animation: fade-in 0.3s cubic-bezier(0.37, 0.55, 0.86, 0.88) both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* a screen arriving: it rises 6 px out of a light blur (Craft and Codex both enter this way) */
+.page-in {
+  animation: page-in 0.42s var(--ease-enter) both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+    filter: blur(3px);
+  }
+}
+
+/* a title that does not fit fades out instead of ending in an ellipsis */
+.fade-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(to left, transparent 0, #000 1rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer,
+  .pulsing-dot,
+  .fade-in,
+  .page-in {
+    animation: none;
+  }
+}
+
+.prose-agent {
+  font-size: 14px;
+  line-height: 1.625;
+  color: var(--fg);
+}
+.prose-agent > * + * {
+  margin-top: 0.75em;
+}
+.prose-agent ul,
+.prose-agent ol {
+  padding-left: 1.25em;
+}
+.prose-agent ul {
+  list-style: disc;
+}
+.prose-agent ol {
+  list-style: decimal;
+}
+.prose-agent li + li {
+  margin-top: 0.25em;
+}
+.prose-agent li::marker {
+  color: var(--fg-3);
+}
+.prose-agent a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.prose-agent a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-agent code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--hover);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+}
+.prose-agent pre {
+  background: var(--sidebar);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  box-shadow: 0 0 0 0.5px var(--line-strong);
+}
+.prose-agent pre code {
+  background: none;
+  padding: 0;
+}
+.prose-agent h1,
+.prose-agent h2,
+.prose-agent h3 {
+  font-size: 1em;
+  font-weight: 600;
+}
+.prose-agent blockquote {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 0.9em;
+  color: var(--fg-2);
+}
+.prose-agent table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.prose-agent th,
+.prose-agent td {
+  border: 0.5px solid var(--line-strong);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+/* Desktop (Electron) window. The traffic lights sit at (16, 16) inside a 46 px title area, like Codex. The sidebar is
+   translucent over the window's "menu" vibrancy while focused; the main panel stays opaque with a rounded inner edge. */
+html.desktop .sidebar-head {
+  height: 46px;
+  padding-top: 0;
+  padding-left: 76px; /* just past the traffic lights: red at x 16, green ends at 75.5 */
+  -webkit-app-region: drag;
+}
+html.desktop .sidebar-head * {
+  -webkit-app-region: no-drag;
+}
+html.desktop [data-drag] {
+  -webkit-app-region: drag;
+}
+html.desktop [data-drag] :is(a, button, input, label, textarea) {
+  -webkit-app-region: no-drag;
+}
+html.desktop body {
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+html.desktop :is(.prose-agent, textarea, input, [data-selectable]) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+html.desktop[data-surface="vibrant"] .app-sidebar {
+  background: color-mix(in srgb, var(--sidebar) 70%, transparent);
+}
+html.desktop .app-main {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+  box-shadow: 0 0 0 0.5px var(--line-strong);
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Clea's mark in motion (components/brand.tsx). The waves are the bands: speaking sends light out from the dot through
+   the inner band to the outer one, listening brings it in, intro draws the mark once from the dot outward. Pieces scale
+   from the mark's centre, the dot (0, 0 in its own units). */
+.clea-mark path {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+/* idle is never dead still: every 6 s one soft wave leaves the dot */
+.clea-mark[data-state="idle"] .clea-mark__dot { animation: clea-idle 6s var(--ease-wave) 1s infinite; }
+.clea-mark[data-state="idle"] .clea-mark__inner { animation: clea-idle 6s var(--ease-wave) 1.25s infinite; }
+.clea-mark[data-state="idle"] .clea-mark__outer { animation: clea-idle 6s var(--ease-wave) 1.5s infinite; }
+@keyframes clea-idle {
+  0%, 22%, 100% { opacity: 1; scale: 1; }
+  7% { opacity: 0.55; scale: 0.95; }
+  14% { opacity: 1; scale: 1.025; }
+}
+.clea-mark[data-state="speaking"] .clea-mark__dot { animation: clea-wave 1.8s var(--ease-wave) infinite; }
+.clea-mark[data-state="speaking"] .clea-mark__inner { animation: clea-wave 1.8s var(--ease-wave) 0.22s infinite; }
+.clea-mark[data-state="speaking"] .clea-mark__outer { animation: clea-wave 1.8s var(--ease-wave) 0.44s infinite; }
+.clea-mark[data-state="listening"] .clea-mark__outer { animation: clea-wave 1.8s var(--ease-wave) infinite; }
+.clea-mark[data-state="listening"] .clea-mark__inner { animation: clea-wave 1.8s var(--ease-wave) 0.22s infinite; }
+.clea-mark[data-state="listening"] .clea-mark__dot { animation: clea-wave 1.8s var(--ease-wave) 0.44s infinite; }
+@keyframes clea-wave {
+  0%, 100% { opacity: 1; scale: 1; }
+  30% { opacity: 0.38; scale: 0.94; }
+  60% { opacity: 1; scale: 1.03; }
+}
+.clea-mark[data-state="intro"] path { animation: clea-draw 0.9s var(--ease-enter) both; }
+.clea-mark[data-state="intro"] .clea-mark__inner { animation-delay: 0.12s; }
+.clea-mark[data-state="intro"] .clea-mark__outer { animation-delay: 0.24s; }
+.clea-mark[data-state="intro"] .clea-word path { animation: clea-rise 0.8s var(--ease-enter) both; }
+.clea-mark[data-state="intro"] .clea-word path:nth-child(1) { animation-delay: 0.3s; }
+.clea-mark[data-state="intro"] .clea-word path:nth-child(2) { animation-delay: 0.36s; }
+.clea-mark[data-state="intro"] .clea-word path:nth-child(3) { animation-delay: 0.42s; }
+.clea-mark[data-state="intro"] .clea-word path:nth-child(4) { animation-delay: 0.48s; }
+@keyframes clea-draw {
+  from { opacity: 0; scale: 0.4; }
+  60% { opacity: 1; }
+}
+@keyframes clea-rise {
+  from { opacity: 0; translate: 0 2px; }
+}
+
+/* the lit tile: a halo of the brand blue under it, the dot's glow, and a band of light that crosses every 7 s */
+.clea-icon__halo {
+  position: absolute;
+  inset: -38%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--brand) 34%, transparent), color-mix(in oklab, var(--brand) 10%, transparent) 55%, transparent);
+  filter: blur(6px);
+  opacity: 0.7;
+  transition: opacity 0.6s var(--ease-move);
+}
+.clea-icon.is-busy .clea-icon__halo { animation: clea-breathe 2.4s ease-in-out infinite; }
+.clea-icon__glow { transform-box: view-box; transform-origin: 32px 32px; }
+.clea-icon.is-busy .clea-icon__glow { animation: clea-glow 1.8s ease-in-out infinite; }
+.clea-icon__sheen { animation: clea-sheen 7s var(--ease-move) 1.2s infinite; translate: 0 0; }
+@keyframes clea-sheen {
+  0% { translate: 0 0; }
+  22%, 100% { translate: 120px 0; }
+}
+@keyframes clea-breathe {
+  0%, 100% { opacity: 0.55; scale: 0.94; }
+  50% { opacity: 1; scale: 1.06; }
+}
+@keyframes clea-glow {
+  0%, 100% { opacity: 0.7; scale: 0.9; }
+  50% { opacity: 1; scale: 1.25; }
+}
+
+html.away .clea-mark path,
+html.away .clea-icon__halo,
+html.away .clea-icon__glow,
+html.away .clea-icon__sheen {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .clea-mark path,
+  .clea-icon__halo,
+  .clea-icon__glow,
+  .clea-icon__sheen {
+    animation: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   The sky behind the main panel (components/Sky.tsx), Craft's onboarding background rebuilt. Craft's gradient runs
+   top to bottom with stops at 0, 0.75 and 1: light #A5E0FF 0.4 > #D7E6ED 0.4 > #D7E6ED 0, dark #132961 0.6 > #39486F
+   0.6 > #39486F 0.4. Clea's leans to the brand blue. In the dark the clouds are soft-light at 0.3 and the stars
+   color-dodge, as in Craft; in the light the clouds are plain and there are no stars. */
+.sky {
+  isolation: isolate;
+  transition: opacity 0.6s var(--ease-move);
+}
+.sky[data-hidden] {
+  opacity: 0;
+}
+.sky[data-hidden] .sky__cloud {
+  animation-play-state: paused;
+}
+.sky__gradient {
+  background: linear-gradient(
+    to bottom,
+    light-dark(rgb(150 182 255 / 0.55), rgb(20 33 104 / 0.62)) 0%,
+    light-dark(rgb(205 218 245 / 0.45), rgb(52 64 112 / 0.5)) 75%,
+    light-dark(rgb(219 228 245 / 0), rgb(52 64 112 / 0.32)) 100%
+  );
+}
+.sky__stars {
+  mix-blend-mode: color-dodge; /* drawn only in the dark */
+}
+.sky__cloud {
+  max-width: none;
+  will-change: transform;
+  animation-name: sky-drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes sky-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(var(--lap), 0, 0); }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sky__cloud { mix-blend-mode: soft-light; opacity: 0.3; }
+}
+:root[data-theme="dark"] .sky__cloud { mix-blend-mode: soft-light; opacity: 0.3; }
+html.away .sky__cloud { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .sky__cloud { animation-play-state: paused; }
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Surfaces over the sky, from Craft's tricks (Craft.app, 2026-10-23):
+   - glass: CraftGlassMaterialView blurs what is behind and draws a "fake glass outline", the tint lightened along the top
+     edge and darkened around the rest; here a backdrop blur, a translucent panel, a top highlight and a hairline;
+   - shadows: Craft's layer shadows are soft and low, (0, 2) r6 and (0, 8) r25 at about 0.06;
+   - lift: a card rises a pixel on hover and its shadow deepens, in Craft's 0.25 s;
+   - grain: Craft lays a noise tile (WindowGrain) over the window; ours is drawn at boot (main.tsx). */
+:root {
+  --glass: light-dark(rgb(255 255 255 / 0.72), rgb(30 30 34 / 0.62));
+  --glass-strong: light-dark(rgb(255 255 255 / 0.86), rgb(32 32 36 / 0.8));
+  --glass-edge: light-dark(rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.09));
+  --soft-shadow: 0 2px 6px light-dark(rgb(16 24 64 / 0.05), rgb(0 0 0 / 0.25)), 0 8px 25px -6px light-dark(rgb(16 24 64 / 0.08), rgb(0 0 0 / 0.35));
+  --lift-shadow: 0 4px 10px light-dark(rgb(16 24 64 / 0.07), rgb(0 0 0 / 0.3)), 0 16px 36px -8px light-dark(rgb(16 24 64 / 0.12), rgb(0 0 0 / 0.45));
+  --ease-spring: cubic-bezier(0.2, 0.9, 0.25, 1); /* Craft's (0.3 s, damping 0.95) spring, as a curve */
+}
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+  backdrop-filter: blur(22px) saturate(1.6);
+  box-shadow: inset 0 0.5px 0 0 var(--glass-edge), 0 0 0 0.5px var(--line-strong), var(--soft-shadow);
+}
+.glass-strong {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(28px) saturate(1.7);
+  backdrop-filter: blur(28px) saturate(1.7);
+  box-shadow: inset 0 0.5px 0 0 var(--glass-edge), 0 0 0 0.5px var(--line-strong), var(--soft-shadow);
+}
+.lift {
+  transition: translate 0.25s var(--ease-spring), box-shadow 0.25s var(--ease-spring), background-color 0.15s;
+}
+.lift:hover {
+  translate: 0 -1px;
+  box-shadow: inset 0 0.5px 0 0 var(--glass-edge), 0 0 0 0.5px var(--line-strong), var(--lift-shadow);
+}
+.lift:active {
+  translate: 0 0;
+  transition-duration: 0.1s;
+}
+.press {
+  transition: scale 0.15s var(--ease-spring), filter 0.15s, opacity 0.15s;
+}
+.press:active:not(:disabled) {
+  scale: 0.97;
+}
+
+/* the brand button: lit like the app icon, light from the top, a glass rim, the blue's own glow below */
+.btn-brand {
+  color: #fff;
+  background: linear-gradient(to bottom, #4458ff, var(--brand) 60%, #1a2bd8);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 rgb(0 0 40 / 0.2), 0 0 0 0.5px rgb(16 28 170 / 0.6),
+    0 2px 8px -2px rgb(33 53 244 / 0.55);
+  transition: filter 0.15s, scale 0.15s var(--ease-spring), box-shadow 0.2s;
+}
+.btn-brand:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -1px 0 rgb(0 0 40 / 0.2), 0 0 0 0.5px rgb(16 28 170 / 0.6),
+    0 4px 14px -3px rgb(33 53 244 / 0.65);
+}
+.btn-brand:active:not(:disabled) {
+  scale: 0.97;
+}
+.btn-brand:disabled {
+  filter: saturate(0.4);
+  opacity: 0.5;
+}
+
+/* the composer takes focus with a ring of the brand blue */
+.composer-shell {
+  transition: box-shadow 0.25s var(--ease-spring);
+}
+.composer-shell:focus-within {
+  box-shadow: var(--elev-composer), 0 0 0 1px color-mix(in oklab, var(--brand-ink) 45%, transparent),
+    0 0 0 5px color-mix(in oklab, var(--brand) 12%, transparent);
+}
+
+/* A form field (setup and settings): quiet until it has focus, then the composer's ring; a red edge when what it holds
+   was refused. The global rule drops the outline on inputs, so this ring is their focus state. */
+:root {
+  --field: light-dark(rgb(255 255 255 / 0.66), rgb(255 255 255 / 0.045));
+}
+.field {
+  background-color: var(--field); /* the color only: a select keeps its arrow image */
+  box-shadow: 0 0 0 0.5px var(--line-strong), 0 1px 1px light-dark(rgb(16 24 64 / 0.03), transparent);
+  transition: box-shadow 0.2s var(--ease-spring), background-color 0.15s;
+}
+.field:is(:focus, :focus-within) {
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand-ink) 55%, transparent), 0 0 0 4px color-mix(in oklab, var(--brand) 14%, transparent);
+}
+.field:is([aria-invalid="true"], [data-invalid]) {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--red) 65%, transparent);
+}
+.field:is([aria-invalid="true"], [data-invalid]):is(:focus, :focus-within) {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--red) 65%, transparent), 0 0 0 4px color-mix(in oklab, var(--red) 14%, transparent);
+}
+.field:disabled {
+  opacity: 0.55;
+}
+/* a choice the user can pick (a model, a level of trust): the brand's edge when it is the one in use */
+.choice {
+  background-color: var(--field);
+  box-shadow: 0 0 0 0.5px var(--line-strong);
+  transition: box-shadow 0.2s var(--ease-spring), background-color 0.2s;
+}
+.choice[data-on] {
+  background-color: color-mix(in oklab, var(--brand-soft) 55%, var(--field));
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--brand-ink) 70%, transparent);
+}
+button.choice:hover:not([data-on]) {
+  background-color: color-mix(in oklab, var(--hover) 60%, var(--field));
+}
+/* the ink button (Continue with ChatGPT is black in OpenAI's guidelines): the text color as the fill */
+.btn-ink {
+  color: var(--bg);
+  background: var(--fg);
+  transition: filter 0.15s, scale 0.15s var(--ease-spring), opacity 0.15s;
+}
+.btn-ink:hover:not(:disabled) {
+  filter: brightness(1.18);
+}
+.btn-ink:active:not(:disabled) {
+  scale: 0.97;
+}
+.btn-ink:disabled {
+  opacity: 0.5;
+}
+
+/* sections of a screen arrive one after another */
+.rise {
+  animation: page-in 0.55s var(--ease-enter) both;
+}
+.rise-1 { animation-delay: 60ms; }
+.rise-2 { animation-delay: 120ms; }
+.rise-3 { animation-delay: 180ms; }
+.rise-4 { animation-delay: 240ms; }
+
+/* film grain over the whole window */
+html::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  background-image: var(--grain);
+  background-size: 128px 128px;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])::after { opacity: 0.08; }
+}
+:root[data-theme="dark"]::after { opacity: 0.08; }
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
+  .lift:hover { translate: none; }
+}

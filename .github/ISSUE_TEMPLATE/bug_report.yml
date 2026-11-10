@@ -1,0 +1,69 @@
+name: Bug report
+description: Clea did something wrong, or did nothing when it should have.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Remove names, tokens and private messages from anything you paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The message, pull request or ticket that started it, and what Clea did with it. A simulator scenario that shows it is the best report there is (see docs/simulator.md).
+      placeholder: |
+        1. A teammate writes "..." in a thread I started
+        2. Clea opens a second case for the same thread
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Slack intake (what it reads, what becomes a case)
+        - Replies and drafts
+        - Building (investigate, plan, build, checks, pull request)
+        - Reviews of other people's pull requests
+        - Jira
+        - First run and Settings
+        - The guard and approvals
+        - The app (web or desktop)
+        - Simulator
+        - Something else
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Model sign-in
+      options:
+        - Claude Code on this Mac
+        - Anthropic API key
+        - Codex on this Mac
+        - Sign in with ChatGPT
+        - OpenAI API key
+        - Not relevant
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit (`git rev-parse --short HEAD`) or release you run, and your macOS version.
+      placeholder: v0.2.0, macOS 26.1
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The lines around the problem from `<CLEA_HOME>/var/log/`. They can contain message text, so read them before pasting.
+      render: text
