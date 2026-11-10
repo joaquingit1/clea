@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+uv.lock
+
+# The app
+node_modules/
+ui/dist/
+desktop/out/
+
+# An install's own state when the checkout doubles as its home (tests, a dev run without CLEA_HOME)
+/var/
+/config.json
+/secrets.json
+/codex/
+/worktrees/
+/mirror/
+/repos/
+/remotes/
+
+# Built by guard/build.sh
+/guard/Clea.app/
+
+.DS_Store
+.env
+.env.*

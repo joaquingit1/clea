@@ -1,0 +1,26 @@
+name: Feature request
+description: Something Clea should read, do or let you control.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The situation
+      description: What happens in your day that Clea does not handle, or handles in a way that costs you time. A concrete example beats a general wish.
+    validations:
+      required: true
+  - type: textarea
+    id: want
+    attributes:
+      label: What you would want it to do
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: What should it need your approval for
+      description: Anything that writes in your name (a message, a comment, a merge) goes through the guard. Say what you would let it do on its own and what should wait for you.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
