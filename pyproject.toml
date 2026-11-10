@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development",
 ]
-dependencies = ["slack_sdk>=3.30"]
+dependencies = ["slack_sdk>=3.46.0"]
 
 [project.optional-dependencies]
 api = ["anthropic>=0.40"]
