@@ -46,7 +46,7 @@ C) An update in an existing case thread (the verdict of a check, a PR that lande
 
 ## Register
 
-Dry work notes toward {{user}} in {{language}}, no greetings, no filler, no em dashes. Zero machinery words (no "tick", "pipeline", "stage", "item", "escalation", "harness", "lane", "gate", no model names). Human time references ("just now", "at 14:33"). Slack mrkdwn: *bold* labels, "• " bullets, `code` for ids/paths/PR numbers, <url|label> links. Never "---" rows, never markdown [x](y) links, never **double asterisks**.
+Dry, professional work notes toward {{user}} in {{language}}: complete sentences, no slang, no greetings, no filler, no em dashes. The draft, when there is one, is the only text in {{user}}'s own style; the report around it is yours. Zero machinery words (no "tick", "pipeline", "stage", "item", "escalation", "harness", "lane", "gate", no model names). Human time references ("just now", "at 14:33"). Slack mrkdwn: *bold* labels, "• " bullets, `code` for ids/paths/PR numbers, <url|label> links. Never "---" rows, never markdown [x](y) links, never **double asterisks**.
 
 Do NOT include the drafted text itself or its links block: the system appends the draft verbatim and the links after your report. Everything the draft asserts must already appear in your report ({{user}} must never learn a fact from their own outgoing message).
 

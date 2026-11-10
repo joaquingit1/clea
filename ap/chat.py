@@ -142,12 +142,12 @@ def _act(a: dict) -> str:
 
 
 FAST = {"type": "object", "required": ["reply", "needs_deep"], "properties": {
-    "reply": {"type": "string", "description": "coworker-style Slack reply: 1-2 short lines, lowercase ok, no preamble"},
+    "reply": {"type": "string", "description": "a brief, professional reply to him: 1-2 short lines, complete sentences, no preamble"},
     "needs_deep": {"type": "boolean", "description": "true unless the reply above fully answers him"}}}
-ACKS = site.t(("ok, looking", "on it, checking now", "give me a minute and I'll tell you", "checking, I'll get back to you"),
-              ("dale, lo miro", "va, ya lo reviso", "dame un toque y te digo", "lo chequeo y te cuento"))
-VOICE = (f"You text like {site.first_name()}'s coworker on Slack: short, direct, casual "
-         + site.own("Rioplatense Spanish if he writes in Spanish", f"{site.language_name()}") + ", "
+ACKS = site.t(("Understood. I'm looking into it.", "On it. Checking now.", "I'll check and report back shortly.", "Checking. I'll get back to you."),
+              ("Entendido, lo reviso.", "Lo estoy revisando.", "Lo verifico y te aviso.", "Lo reviso y te confirmo."))
+VOICE = (f"You answer {site.first_name()} on Slack as his engineering assistant: short, direct and professional (complete sentences, "
+         "no slang, no jokes), in " + site.own("Rioplatense Spanish if he writes in Spanish", f"{site.language_name()}") + ", "
          "no preamble, no bullet lists unless asked, no em dashes, 1-3 lines. Facts only from what you are given.")
 
 
@@ -164,7 +164,7 @@ def _fast(text: str, thread_ts: str) -> dict:
     """The voice only talks: an instant, natural
     acknowledgement that fits what he wrote. It never answers or decides; every message goes to the thinker."""
     from . import voice
-    reply = voice.ack(f"{site.first_name()} just wrote: {text}\n\nWrite ONLY a short natural acknowledgement (a few words, his register) "
+    reply = voice.ack(f"{site.first_name()} just wrote: {text}\n\nWrite ONLY a short acknowledgement (one brief, professional sentence) "
                       f"that you got it and are checking. NEVER answer the question (no yes/no{site.own(", no 'nada', no 'listo'", "")}), never state "
                       f"facts, never promise specifics. "
                       f"If he is only thanking or closing the conversation, reply with a matching one-liner.")
@@ -175,12 +175,12 @@ def _fast(text: str, thread_ts: str) -> dict:
 
 
 def _speak(deep_reply: str, done: list[str], text: str) -> str:
-    """The voice delivers the thinker's answer in his register: plain, short, nothing he would have to decode."""
+    """The voice delivers the thinker's answer: plain, short, professional, nothing he would have to decode."""
     from . import voice
     try:
-        out = voice.say(f"{site.first_name()} asked: {text}\n\nThe answer to give him:\n{deep_reply[:6000]}\n\nRewrite it the way a "
-                        "teammate "
-                        f"would text it in Slack. Keep EVERY finding, number, time, link and recommendation: you change the wording, never the content or its depth "
+        out = voice.say(f"{site.first_name()} asked: {text}\n\nThe answer to give him:\n{deep_reply[:6000]}\n\nRewrite it as a clear, "
+                        "professional "
+                        f"message for Slack: plain words, complete sentences, no slang. Keep EVERY finding, number, time, link and recommendation: you change the wording, never the content or its depth "
                         f"(an analysis stays an analysis). If it lists two or more things, use a one-line intro and short bullets "
                         f"(\"• \"), one item per bullet, most urgent first, each saying what it is and what he has to do"
                         + site.own(" (or 'nada')", " (or nothing)") + ". A plain answer stays 1-3 short lines. Keep links as Slack links with short labels "

@@ -7,9 +7,16 @@ specified and how a change is checked.
 ```
 make sim                               # every scenario, on the scripted model (about a minute, no tokens)
 python -m sim -k thread -v             # the scenarios about threads, with each one's story
-python -m sim -k demo --serve          # then open the app on what the scenario left
+python -m sim -k demo --serve          # with the app open on the simulated workspace (port 4850)
 python -m sim --live -k bug_to_draft   # the same engine, thinking with your real model (spends tokens)
 ```
+
+## Watching it in the app
+
+`--serve` opens the app on the simulated workspace from the start of the run: the board shows each case moving while
+the scenarios play, and stays up afterwards on what the last one left. Approving a draft there sends it to the
+simulated Slack. `python -m sim -k demo --live --serve` is the run the README's captures come from: a DM question,
+a teammate's pull request, and a reported bug that ends as a draft pull request.
 
 ## What a scenario is
 

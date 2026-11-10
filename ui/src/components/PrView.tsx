@@ -141,12 +141,17 @@ export function PrView({ repo, n, board }: { repo: string; n: number; board: Boa
 function Repro({ pr }: { pr: OwnPr }) {
   const r = pr.repro;
   const ok = !!r?.e2e;
+  const skipped = r?.verdict === "skipped"; // no test could be run here: said plainly, and not as a failure
+  // the fix passed the test before the commit was pushed; the run on the final commit comes when CI is done
+  const gateGreen = !ok && r?.verdict === "reproduced" && !r.green_fail && !!r.gate_green_at;
   const when = (ts: number | null) => (ts ? `${dayLabel(ts).toLowerCase()} ${clock(ts)}` : "");
   const title = tr(
-    ok ? "pr.repro.ok" : !r ? "pr.repro.none" : r.verdict === "reproduced" ? "pr.repro.notGreen" : r.verdict === "observed" ? "pr.repro.observed" : "pr.repro.failed",
+    ok ? "pr.repro.ok" : !r ? "pr.repro.none" : skipped ? "pr.repro.skipped" : gateGreen ? "pr.repro.gateGreen" : r.verdict === "reproduced" ? "pr.repro.notGreen" : r.verdict === "observed" ? "pr.repro.observed" : "pr.repro.failed",
   );
   const body = ok
     ? tr("pr.repro.okBody", { red: when(r!.red_at), green: when(r!.green_at) })
+    : gateGreen
+      ? tr("pr.repro.gateGreenBody", { red: when(r!.red_at), green: when(r!.gate_green_at ?? null) })
     : !r
       ? tr("pr.repro.noneBody")
       : r.verdict === "reproduced"
@@ -158,11 +163,15 @@ function Repro({ pr }: { pr: OwnPr }) {
     <div
       className={cx(
         "mt-4 rounded-3xl p-5",
-        ok ? "bg-green-soft shadow-[0_0_0_0.5px_color-mix(in_srgb,var(--green)_35%,transparent)]" : "bg-red-soft shadow-[0_0_0_0.5px_color-mix(in_srgb,var(--red)_30%,transparent)]",
+        ok || gateGreen
+          ? "bg-green-soft shadow-[0_0_0_0.5px_color-mix(in_srgb,var(--green)_35%,transparent)]"
+          : skipped
+            ? "bg-hover shadow-[0_0_0_0.5px_var(--line-strong)]"
+            : "bg-red-soft shadow-[0_0_0_0.5px_color-mix(in_srgb,var(--red)_30%,transparent)]",
       )}
     >
-      <p className={cx("flex items-center gap-2 text-[14px] font-semibold", ok ? "text-green" : "text-red")}>
-        {ok ? <CheckCircle2 size={16} /> : <XCircle size={16} />} {title}
+      <p className={cx("flex items-center gap-2 text-[14px] font-semibold", ok || gateGreen ? "text-green" : skipped ? "text-fg-2" : "text-red")}>
+        {ok || gateGreen ? <CheckCircle2 size={16} /> : skipped ? null : <XCircle size={16} />} {title}
       </p>
       <p className="mt-1.5 text-[13.5px] leading-relaxed text-fg">{body}</p>
       {r?.files.length ? (

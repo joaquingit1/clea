@@ -159,9 +159,15 @@ def explain(it: dict) -> str:
     d = it["data"]
     ds = d.get("dossier") or {}
     tel = (d.get("telemetry") or {}).get("summary") if isinstance(d.get("telemetry"), dict) else ""
+    # a reply case has no dossier: what was read and checked for it is in the reply lane's own answer. Without it the
+    # analysis said "I did not read the code" under bullets that quoted the code
+    ro = d.get("reply_opus") if isinstance(d.get("reply_opus"), dict) else {}
     facts = "\n".join(x for x in [f"Problem: {ds.get('problem') or d.get('summary') or ''}",
                                    f"Root cause ({ds.get('root_cause_status') or '?'}): {ds.get('root_cause') or ''}",
                                    f"Recommendation: {ds.get('recommendation') or ''}", f"Production evidence: {tel or ''}",
+                                   f"What was found: {ro.get('report') or d.get('report_text') or ''}",
+                                   "Checks made: " + " | ".join(str(c) for c in ro.get("checks") or []),
+                                   f"Reply drafted: {d.get('reply_text') or ''}",
                                    "Card bullets: " + " | ".join(d.get("card_bullets") or [])] if x.split(": ", 1)[1].strip())
     out = claude.lean("report", f"Case: {d.get('card_headline') or it['title']}\n\n{facts[:6000]}\n\nWrite the analysis for "
                       f"{site.first_name()}'s case page from these facts only.", model="sonnet", cwd=str(Path.home()), schema=EXPLAIN,

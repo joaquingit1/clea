@@ -462,6 +462,11 @@ def _roots(wt: Path, files: list[str] | None, eco: str) -> dict[str, list[str]]:
         for f in ls:
             if f.rsplit("/", 1)[-1] in MANIFESTS[eco] and f.count("/") <= 3 and not VENDORED.search(f):
                 out.setdefault(f.rsplit("/", 1)[0] if "/" in f else "", [])
+        if eco == "python" and not out and any(f.endswith(".py") and not VENDORED.search(f) for f in ls):
+            # loose Python with no project file is still one project, as it is for a diff below: described without a
+            # diff it had no root, so its unittest suite did not count as a way to run tests and the reproduce stage
+            # stepped aside ("no test command this install can run") on a repo whose tests the gate then ran
+            out[""] = []
         return dict(sorted(out.items())[:20])
     for f in files:
         if VENDORED.search(f) or not (ECOSYSTEM[eco].search(f) or f.rsplit("/", 1)[-1] in MANIFESTS[eco]):

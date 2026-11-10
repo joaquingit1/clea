@@ -47,6 +47,7 @@ if (session or {}).get("fix"):  # the fix lands: the gate's reproduction check r
     subprocess.run(["git", "-C", str(wt), "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "core.hooksPath=/dev/null",
                     "commit", "-qam", "fix"], check=True)
     out["gate"] = repro.gate_check(it, {"repo": "calc", "wt": str(wt)})
+    out["after_gate"] = db.item(iid)["data"].get("repro")
 print("@@" + json.dumps(out))
 """
 
@@ -85,6 +86,8 @@ def test_reproduced_with_the_repos_own_runner_then_green_with_the_fix(tmp_path):
     assert "frontend/" not in res["prompt"] and "pnpm --filter" not in res["prompt"]  # the first install's own runners
     assert res["told"] and res["told"][0].startswith("🔁 Reproduced:"), res["told"]
     assert res["gate"] == [], res["gate"]
+    after = res["after_gate"]  # the gate's green run is on record for the PR's screen; the final run's stamp is not its to set
+    assert after["gate_green_at"] and after["gate_green_head"] and not after.get("green_at"), after
 
 
 def test_nothing_can_run_a_test_steps_aside_without_a_session(tmp_path):
@@ -118,3 +121,13 @@ def test_a_runner_missing_on_this_machine_steps_aside(tmp_path):
 def test_the_runners_other_installs_use_are_allowed(cmd, allowed):
     from ap import repro
     assert bool(repro.CMD_OK.match(cmd)) is allowed
+
+
+def test_a_unittest_run_reads_as_passing_only_when_tests_ran_and_passed():
+    from ap import repro
+    ok = "----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+    assert repro.green_problem(0, ok, ["tests/test_coupons.py"]) == ""
+    assert repro.green_problem(0, "Ran 0 tests in 0.000s\n\nOK\n", ["tests/test_coupons.py"])  # nothing ran: not a pass
+    failing = "FAIL: test_x (tests.test_coupons.T.test_x)\n  File \"/wt/tests/test_coupons.py\", line 14, in test_x\nAssertionError: 149 != 150\nRan 1 test in 0.001s\n\nFAILED (failures=1)\n"
+    assert repro.green_problem(1, failing, ["tests/test_coupons.py"])
+    assert repro.red_problem(1, failing, ["tests/test_coupons.py"]) == ""

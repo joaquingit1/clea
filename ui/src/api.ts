@@ -91,6 +91,7 @@ export interface OwnPr {
     why: string;
     red_at: number | null;
     green_at: number | null;
+    gate_green_at?: number | null;
     green_head: string | null;
     backfill?: boolean;
     branch?: string | null;

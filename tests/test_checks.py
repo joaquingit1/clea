@@ -267,6 +267,22 @@ def test_a_unittest_suite_is_run_and_a_branch_that_breaks_it_fails(tmp_path):
     assert by_name(res)["unittest"]["status"] == "pass" and res["passed"], res["layers"]
 
 
+def test_a_unittest_repo_with_no_project_file_can_run_a_reproduction_test(tmp_path):
+    """Asked how the repo runs its tests, with no diff in hand (what the reproduce stage asks before the fix exists),
+    loose Python counts as a project: its unittest suite is the answer, not 'no test command'."""
+    wt = repo(tmp_path, "ut3", UNITTEST_BASE, {"calc/core.py": "def half(n):\n    return n // 2  # same\n"})
+    env = {**os.environ, "CLEA_HOME": str(tmp_path / "home-ut3"), "CLEA_CODE": str(ROOT), "PYTHONPATH": str(ROOT)}
+    (tmp_path / "home-ut3").mkdir()
+    (tmp_path / "home-ut3" / "config.json").write_text(json.dumps({
+        "edition": "release", "language": "en", "repos": {"ut3": {"path": str(wt), "default": "main"}}, "primary_repo": "ut3"}))
+    p = subprocess.run([sys.executable, "-c", "import json, sys\nfrom pathlib import Path\nfrom ap import gates\n"
+                        "print(json.dumps(gates.how_tests_run('ut3', Path(sys.argv[1]))))", str(wt)],
+                       capture_output=True, text=True, env=env, cwd=tmp_path, timeout=120)
+    assert p.returncode == 0, p.stderr[-800:]
+    runs = json.loads(p.stdout.strip().splitlines()[-1])
+    assert len(runs) == 1 and "unittest discover" in runs[0]["run"], runs
+
+
 def test_an_install_without_the_review_bot_waits_for_no_pass(tmp_path):
     wt = repo(tmp_path, "cr", UNITTEST_BASE, {"calc/core.py": "def half(n):\n    return n // 2  # same\n"})
     env = {**os.environ, "CLEA_HOME": str(tmp_path / "home-cr"), "CLEA_CODE": str(ROOT), "PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin"}

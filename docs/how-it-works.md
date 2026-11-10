@@ -51,7 +51,7 @@ case's story and evidence, the drafts waiting for you, a chat, and Settings.
 | Lane | Stages | Ends with |
 | --- | --- | --- |
 | Reply | read the thread, look things up when the answer needs facts, draft, check the draft | A draft in your voice, waiting for your OK |
-| Task | vet, reproduce, investigate, plan, critique the plan, build in a worktree, run the repo's own checks, self review, fix | A draft pull request with the fix and its tests |
+| Task | vet, investigate, reproduce the bug with a failing test, plan, critique the plan, build in a worktree, run the repo's own checks, self review, fix | A draft pull request with the fix and its tests |
 | Review | read the diff and the code around it, find problems, verify each finding | A review waiting for your OK (or posted, if you allowed it) |
 | Your own pull requests | watch CI and review threads, fix, answer reviewers | A green, answered pull request |
 | Tickets | the Jira tickets you chose become tasks | The same as a task |

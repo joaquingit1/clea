@@ -140,14 +140,16 @@ def _ask_thread_message(it: dict, threads: list[dict], tickets: list[str], live_
          + ("El hilo es de ops/ventas: nada técnico, corto (máximo 40 palabras): qué se arregló en una frase, que ya está en producción, "
             "y que avisen si vuelve a pasar. " if ops else
             "El hilo es del equipo: una o dos frases, podés nombrar el PR. ")
-         + "En su voz (voseo, minúsculas, natural, sin formalidad, sin listas). Solo el texto.\n\n"
+         + "En su voz (voseo, natural, sin listas), en el registro en que está escrito el hilo: tan informal o tan cuidado como "
+           "los mensajes de arriba. Solo el texto.\n\n"
          f"Problema: {problem}\nQué se hizo: {done}\n" + facts + f"HILO:\n{raw}"),
         (f"Write the message {site.first_name()} posts in the Slack thread to say the problem is solved, in "
          f"{site.language_name()}. "
          + ("The thread belongs to operations or sales: nothing technical, short (at most 40 words): what was fixed in one "
             "sentence, that it is already in production, and to say so if it happens again. " if ops else
             "The thread belongs to the team: one or two sentences, you can name the PR. ")
-         + f"In {site.first_name()}'s own voice (natural, informal, no lists). Only the text.\n\n"
+         + f"In {site.first_name()}'s own voice, in the register the thread is written in (as casual or as careful as the messages "
+           f"above), no lists. Only the text.\n\n"
          f"Problem: {problem}\nWhat was done: {done}\n" + facts + f"THREAD:\n{raw}"))
     since = _merged_at(it)
     try:  # he may already have told the thread himself after the merge: then no notice, straight to the tickets

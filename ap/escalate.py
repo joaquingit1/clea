@@ -54,7 +54,8 @@ PLAN = {"type": "object", "required": ["still_broken", "evidence", "route", "sum
                       "harness": {"type": "boolean", "description": "the problem is in this harness itself (its code under ap/ "
                                   f"or prompts/, its config, its Claude Code login), not in {site.company() or 'the company'}'s product or infra"}}}},
     "message": {"type": "string", "description": f"for route=human: the message {site.first_name()} sends them, in his voice ("
-                                                 + site.own("Spanish, voseo, casual, greeting first", f"{site.language_name()}, casual, greeting first")
+                                                 + site.own("Spanish, voseo, greeting first, in the register he and that person use with each other",
+                                                            f"{site.language_name()}, greeting first, in the register he and that person use with each other")
                                                  + "), self-contained: what broke, impact now, the exact commands in order (capture evidence first, "
                                                  "then the fix), the risk and its mitigation, what we do in parallel"},
 }}

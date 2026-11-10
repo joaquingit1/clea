@@ -465,8 +465,10 @@ def thread(item_id: int) -> dict | None:
     return {**base,
             "bullets": d.get("card_bullets") or _bullets(d.get("report_text") or ""),
             "analysis": d.get("card_analysis") or "",
-            "cause": d.get("card_cause") or {"proven": "probado", "probable": "probable", "hypothesis": "probable",
-                                             "unknown": "sin confirmar"}.get(ds.get("root_cause_status") or "", ""),
+            # the investigation's own verdict on the cause comes first: the analysis written afterwards only rewords the
+            # case, and its label disagreed with it ("cause unconfirmed" over a text saying the code proves the cause)
+            "cause": {"proven": "probado", "probable": "probable", "hypothesis": "probable",
+                      "unknown": "sin confirmar"}.get(ds.get("root_cause_status") or "", "") or d.get("card_cause") or "",
             "technical": tech if any(tech.values()) else None,
             "source": {"text": (d.get("text") or "")[:3000], "channel": d.get("channel"),
                        "link": _permalink(d), "author": _author(d.get("author"))},
@@ -481,8 +483,11 @@ def thread(item_id: int) -> dict | None:
 
 
 def _bullets(report: str) -> list[str]:
-    """The card's bullets from the case message, for cases reported before card_bullets was stored."""
-    return [_plain(m)[:300] for m in re.findall(r"^[•·-]\s+(.+)$", report, re.M)][:3]
+    """The card's bullets from the case message, for cases that store none of their own (a reply's report). Such a
+    report names what it read (a function, a file) in code marks: the marks go and the words stay. Dropping the words
+    too left sentences without their subject ("Nothing in calls, so I couldn't trace it")."""
+    clean = lambda s: re.sub(r"\s{2,}", " ", s.replace("`", "")).strip(" ,;:")
+    return [clean(m)[:300] for m in re.findall(r"^[•·-]\s+(.+)$", report, re.M)][:3]
 
 
 _OLD_BLIND = re.compile(r"⚠️ La telemetría no vio todo, sus ceros no prueban nada:[^\n]*")
@@ -668,6 +673,7 @@ def _repro_view(rec: dict | None) -> dict | None:
     return {"e2e": rec.get("verdict") == "reproduced" and bool(rec.get("green_at")), "verdict": rec.get("verdict"),
             "kind": rec.get("kind"), "files": (files or [])[:3], "failure": (rec.get("expected_failure") or "")[:240],
             "why": (rec.get("why") or "")[:400], "red_at": rec.get("at"), "green_at": rec.get("green_at"),
+            "gate_green_at": rec.get("gate_green_at"),
             "green_head": rec.get("green_head"), "backfill": bool(rec.get("backfill")), "branch": rec.get("branch"),
             "green_fail": (rec.get("green_fail") or "")[-600:] or None, "green_on": rec.get("green_on"),
             "rejected": (rec.get("rejected") or "")[:400] or None, "question": (rec.get("question") or "")[:400] or None}

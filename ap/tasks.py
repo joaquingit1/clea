@@ -552,7 +552,10 @@ def investigate(it: dict) -> None:
                                                          f"The Slack reply only acknowledges and points to the GitHub threads; it never promises a separate fix.",
                                              "questions": []}})
         return
-    if not it["data"].get("telemetry_done") and needs_telemetry(it) and claude.can_spend("telemetry", it["urgency"] >= 3):
+    # an install with no production data connected has nothing to look at first: no detour, and no line in the case's
+    # story saying it looked at production
+    if (site.feature("telemetry") and not it["data"].get("telemetry_done") and needs_telemetry(it)
+            and claude.can_spend("telemetry", it["urgency"] >= 3)):
         return db.update_item(it["id"], status="telemetry", note="telemetry first (Sentry/Metabase)")
     ctx = _context(it)
     (item_dir(it["id"]) / "context.md").write_text(ctx)

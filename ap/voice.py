@@ -1,5 +1,5 @@
-"""The product's voice: one warm, persistent fast-model session that answers the user in real time (1-3 s), like a
-coworker texting. Deep work happens elsewhere (orchestrator, cases, supervisor); the voice acknowledges instantly and
+"""The product's voice: one warm, persistent fast-model session that answers the user in real time (1-3 s), briefly and
+in a professional register. Deep work happens elsewhere (orchestrator, cases, supervisor); the voice acknowledges instantly and
 later delivers what the backend found, in the same short register. Like a voice agent: a fast talker in front, a
 thinker behind it.
 
@@ -16,54 +16,25 @@ import time
 from . import site
 from .core import CFG, PROMPTS, log
 
-SYSTEM = (f"You are the voice of {site.first_name()}'s autonomous engineering assistant, in his Slack DM. You text like a coworker: "
-          "short, casual, direct, " + site.own("Rioplatense Spanish when he writes in Spanish", f"in {site.language_name()}")
-          + ", 1-3 lines, no preamble, no lists unless "
-          "asked, no emojis unless he uses them, no em dashes. Never invent facts: only use what each message gives you. "
+SYSTEM = (f"You are the voice of {site.first_name()}'s autonomous engineering assistant, in his Slack DM. You speak TO him, as his "
+          "assistant: professional, clear and direct, in complete sentences with normal capitalization and punctuation, "
+          + site.own("in Rioplatense Spanish when he writes in Spanish", f"in {site.language_name()}")
+          + ". Brief (1-3 lines), no preamble, no lists unless asked, no slang, no jokes, no emojis, no em dashes. Never imitate how "
+          "he writes: his own style is for the messages drafted in his name, not for what you say to him. Never invent "
+          "facts: only use what each message gives you. "
           "When you are told to decide if deeper work is needed, end your message with [DEEP] if it is.")
 MAX_TURNS, MAX_AGE = 40, 1800
-
-
-EXCLUDE_DM_WITH = ("Dante",)  # his rule: that register does not represent how he writes to the team
-
-
-def _examples(n: int = 45) -> list[str]:
-    """His own hand-written DMs and short channel replies (the ground truth for the voice), refreshed daily."""
-    from . import db, slack
-    from .core import now
-    cached = db.kv_get("voice_examples") or {}
-    if cached.get("at", 0) > now() - 86400 and cached.get("texts"):
-        return cached["texts"]
-    me, out = CFG["self_user_id"], []
-    try:
-        for h in slack.search(f"from:<@{me}>", count=100) + slack.search(f"from:<@{me}> is:dm", count=100):
-            ch = h.get("channel") or {}
-            txt = (h.get("text") or "").strip()
-            if not txt or ch.get("id") == CFG["self_dm_channel"] or len(txt) > 400 or "http" in txt[:20]:
-                continue
-            if any(x.lower() in str(ch.get("name", "")).lower() for x in EXCLUDE_DM_WITH):
-                continue
-            if txt not in out:
-                out.append(txt)
-    except Exception as e:
-        log("voice: examples fetch failed", err=str(e)[:100])
-    out = out[:n]
-    if out:
-        db.kv_set("voice_examples", {"at": now(), "texts": out})
-    return out
-
-
 def _system_file(lean: bool = False) -> str:
+    """The voice's register is fixed and its own (the user, 2026-11-10: what the assistant says to him is not informal;
+    his style is for what goes out in his name). It used to be modelled on his hand-written messages and his style
+    guide, so it texted him the way he texts his team."""
     from .core import VAR
-    from . import claude
-    ex = "\n".join(f"- {x}" for x in _examples())
-    guide = "" if lean else (f"\n\n## How {site.first_name()} actually writes (his style guide, learned from his messages)\n"
-                             + claude.style_text())
-    text = (SYSTEM + guide
-            + "\n\n## Real messages he wrote (write like these: length, tone, punctuation, letter-doubling, no emoji unless he uses them)\n"
-            + ex + "\n\nNever sound like a customer-service bot: "
-            + site.own("no '¿En qué te puedo ayudar?', no '¡Ey, qué onda!', no ", "no ")
-            + "exclamation-heavy openers, no emojis by default. Short, plain, lowercase-leaning, like texting a teammate.")
+    text = (SYSTEM + "\n\n## Register\nA competent assistant reporting to the person it works for. Plain words, no ceremony "
+            "and no chattiness: neither a customer-service bot ("
+            + site.own("no '¿En qué te puedo ayudar?', no '¡Ey, qué onda!', ", "")
+            + "no exclamation-heavy openers, no offers of further help) nor a friend texting (no slang, no lowercase-only "
+            "lines, no letter-doubling, no filler like 'ok so' or "
+            + site.own("'dale', 'joya', 'un toque'", "'cool', 'yep', 'gonna'") + "). An acknowledgement is one short, complete sentence.")
     f = VAR / ("voice-ack.md" if lean else "voice-system.md")
     f.write_text(text)
     return str(f)

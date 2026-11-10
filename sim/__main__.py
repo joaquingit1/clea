@@ -7,8 +7,9 @@ user's name. Exit code 0 only when every selected scenario passes.
 --live runs on the install's real model provider instead of the scripted model (it spends tokens); only scenarios
 whose outcome does not depend on a scripted answer are selected.
 
---serve opens the app on what the last scenario left (its board, cases and drafts), on a port of its own, until
-Ctrl-C: `python -m sim -k demo --serve` is the app on a simulated workspace, with no account connected.
+--serve opens the app on the simulated workspace, on a port of its own: the board shows each case moving while the
+scenarios play, and stays up on what the last one left until Ctrl-C. `python -m sim -k demo --serve` is the app with
+no account connected.
 """
 from __future__ import annotations
 
@@ -74,22 +75,30 @@ def _to_wall_clock(sim: Sim) -> None:
     sim.offset = 0.0
 
 
-def serve(sim: Sim, port: int) -> None:
-    """The app, on the simulated workspace as the last scenario left it. Approving a draft there sends it to the
-    simulated Slack: nothing real is reachable from this process."""
+def open_app(port: int):
+    """The app on the simulated workspace, from the start of the run: the board shows each case moving while the
+    scenarios play, and stays up afterwards. Approving a draft there sends it to the simulated Slack: nothing real is
+    reachable from this process. None when the app is not built."""
     import http.server
     import threading
     from ap import console
     if not (console.DIST / "index.html").exists():
-        print("\nThe app is not built yet: run `make app` (or `cd ui && pnpm install && pnpm build`) and try again.")
-        return
-    _to_wall_clock(sim)
-    db.kv_set("hot_reload", {"rev": "simulated"})  # what the app shows where an install shows the commit it runs
+        print("The app is not built yet: run `make app` (or `cd ui && pnpm install && pnpm build`) and try again.")
+        return None
     threading.Thread(target=console._refresh_loop, name="console-refresh", daemon=True).start()
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), console._H)
-    print(f"\nThe app is open on the simulated workspace: http://127.0.0.1:{port}  (Ctrl-C to stop)")
+    threading.Thread(target=srv.serve_forever, name="console-http", daemon=True).start()
+    print(f"The app is open on the simulated workspace: http://127.0.0.1:{port}")
+    return srv
+
+
+def keep_open(sim: Sim, port: int) -> None:
+    """The run is over: leave the app up on what the last scenario left, on the real clock, until Ctrl-C."""
+    import threading
+    _to_wall_clock(sim)
+    print(f"\nStill open: http://127.0.0.1:{port}  (Ctrl-C to stop)")
     try:
-        srv.serve_forever()
+        threading.Event().wait()
     except KeyboardInterrupt:
         pass
 
@@ -99,17 +108,20 @@ def main() -> int:
     ap.add_argument("-k", default="", help="only scenarios whose name or group contains this")
     ap.add_argument("--live", action="store_true", help="use the install's real model provider (spends tokens)")
     ap.add_argument("--serve", nargs="?", type=int, const=4850, default=0, metavar="PORT",
-                    help="then open the app on what the last scenario left (default port 4850)")
+                    help="open the app on the simulated workspace while the scenarios play, and keep it up after (default port 4850)")
     ap.add_argument("--report", default=str(HOME / "report.md"))
     ap.add_argument("-v", action="store_true", help="print each scenario's story")
     args = ap.parse_args()
     sim = Sim(live=args.live)
+    app = open_app(args.serve) if args.serve else None
     # a scenario marked live=True also holds on a real model; live="only" needs one (it is about what the model does)
     picked = [sc for sc in _sc.SCENARIOS if (args.k in sc["name"] or args.k == sc["group"])
               and (sc["live"] if args.live else sc["live"] != "only")]
     report, failed = [f"# Clea simulation ({'live' if args.live else 'scripted'}), {time.strftime('%Y-%m-%d %H:%M')}", ""], 0
     for sc in picked:
         sim.reset(sc["config"])
+        if app:
+            db.kv_set("hot_reload", {"rev": "sim"})  # what the app shows where an install shows the commit it runs
         ok = _sc.Checks()
         t0, err = time.perf_counter(), ""
         try:
@@ -137,8 +149,8 @@ def main() -> int:
             report += [f"(could not describe the run: {e})", ""]
     print(f"\n{len(picked) - failed} of {len(picked)} scenarios pass. Report: {args.report}")
     Path(args.report).write_text("\n".join(report))
-    if args.serve and picked:
-        serve(sim, args.serve)
+    if app and picked:
+        keep_open(sim, args.serve)
     return 1 if failed else 0
 
 

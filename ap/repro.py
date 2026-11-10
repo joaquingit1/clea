@@ -393,7 +393,9 @@ def red_problem(rc: int, out: str, files: list[str]) -> str:
     return ""
 
 
-PASSED = re.compile(r"\b\d+ passed\b|^[ℹ#] pass [1-9]|^ok\s+\S|^test result: ok\b", re.M)
+# pytest, node --test, go test, cargo test, and unittest ("Ran 1 test in 0.000s", a blank line, "OK"): without the last,
+# a fix proven by the reproduction on a unittest repo failed the gate twice and the case stopped (a simulated run)
+PASSED = re.compile(r"\b\d+ passed\b|^[ℹ#] pass [1-9]|^ok\s+\S|^test result: ok\b|^Ran [1-9]\d* tests? in [\d.]+s\s*\n\s*OK\b", re.M)
 
 
 def green_problem(rc: int, out: str, files: list[str]) -> str:
@@ -499,6 +501,14 @@ def gate_check(it: dict, part: dict) -> list[str]:
     why = green_problem(rc, out, rec["test_files"])
     if why:
         return [site.t(f"{GATE}: with the fix, {why}", f"{GATE}: con el fix, {why}")]
+    # this run is what lets the commit be pushed: on record, so the PR's screen can say the fix passed the test while
+    # CI runs (it read "the fix has not passed the test yet" until verify_done, on a PR the gate had just proven).
+    # green_at stays the final run's alone: delivery waits on it
+    row = db.item(it["id"]) if it.get("id") else None
+    if row:
+        cur = row["data"].get("repro") or rec
+        db.update_item(it["id"], data={"repro": {**cur, "gate_green_at": now(),
+                                                 "gate_green_head": run(["git", "-C", str(wt), "rev-parse", "HEAD"]).stdout.strip()}})
     return []
 
 
