@@ -33,7 +33,7 @@ Changelog = "https://github.com/joaquingit1/clea/blob/main/CHANGELOG.md"
 clea = "ap.cli:entry"
 
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools>=84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
