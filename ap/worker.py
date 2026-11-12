@@ -111,6 +111,9 @@ def run_stage(it: dict) -> None:
             db.update_item(it["id"], status="blocked", note=cap, data={"blocked_reason": cap, "blocked_from": status,
                                                                          "blocked_by": "scan_budget"})
             return
+        from . import precheck
+        if precheck.settled(it):  # GitHub says there is nothing left to do: the stage's session is not paid for
+            return
         with Awake(), (claude.exempt_ctx() if someone_waits else contextlib.nullcontext()):
             fn(it)
         db.update_item(it["id"], attempts=0)

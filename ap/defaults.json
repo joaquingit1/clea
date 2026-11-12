@@ -160,6 +160,7 @@
  },
  "quality": {
   "max_fix_rounds": 2,
+  "light_fixes": true,
   "max_plan_rounds": 2,
   "review_finder_passes": ["correctness", "contract-nullability", "sibling-parity", "dates-timezones", "state-triad-ui",
                            "permissions-security", "pagination-performance", "tests-evidence", "conventions"],

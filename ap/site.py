@@ -33,6 +33,43 @@ def feature(name: str) -> bool:
     return bool((CFG.get("features") or {}).get(name))
 
 
+# ---- where intake starts --------------------------------------------------------------------------------------------
+def intake_since() -> float:
+    """The moment before which nothing is adopted as work: when this install finished its setup, less the days of
+    backlog it may pick up (config intake.backlog_days: 2 unless set, 0 starts from now). A new install used to take
+    on everything it could see: every open pull request with red CI or an open thread, every pull request waiting
+    for a review, a week of tickets and two weeks of Slack. On 2026-11-10 one did that in its first four hours, 116
+    cases and 86 USD, most of it on work nobody had asked it to start. An install that was never set up through the
+    onboarding (the first one) has no such moment and keeps its own windows: 0."""
+    done = (CFG.get("setup") or {}).get("completed_at")
+    if not done:
+        return 0.0
+    try:
+        days = float((CFG.get("intake") or {}).get("backlog_days", 2))
+    except (TypeError, ValueError):
+        days = 2.0
+    return float(done) - max(0.0, days) * 86400
+
+
+def backlog(when) -> bool:
+    """Whether something last touched at `when` is from before intake_since(). `when` is epoch seconds, a Slack ts, or
+    a time as GitHub and Jira write it (2026-11-10T20:13:40Z, 2026-11-10T15:13:40.000-0500). A time that cannot be read
+    is not called backlog: the case is opened, as before."""
+    since = intake_since()
+    if not since or when in (None, ""):
+        return False
+    try:
+        at = float(when)
+    except (TypeError, ValueError):
+        import datetime as _dt
+        try:
+            t = _dt.datetime.fromisoformat(str(when).strip())
+        except ValueError:
+            return False
+        at = (t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)).timestamp()
+    return at < since
+
+
 # ---- the user -----------------------------------------------------------------------------------------------------
 def me() -> str:
     """The user's Slack id."""

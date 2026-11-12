@@ -453,6 +453,8 @@ class Script:
     def reset(self) -> None:
         self.calls: list[tuple] = []     # (role, prompt)
         self.rules: dict = {}            # role -> fn(prompt, schema) -> answer
+        self.built: list[tuple] = []     # (role, light) per code session
+        self.fail_light = False          # a scenario sets it: light code sessions fail, as a model that gave up would
 
     def on(self, role: str, fn) -> None:
         self.rules[role] = fn
@@ -542,6 +544,11 @@ class Script:
 
     def build(self, role: str, prompt: str, **k):
         self.calls.append((role, prompt))
+        light = bool(k.get("light"))
+        self.built.append((role, light))  # which code sessions ran, and whether each started on the lighter model
+        if light and self.fail_light:
+            from ap import claude
+            raise claude.ClaudeError(f"{role}: sim: the lighter model did not finish")
         return {"text": "sim build", "usd": 0.0, "session": None, "capped": False}
 
     def orchestrator(self, prompt: str, **k):

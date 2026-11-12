@@ -24,7 +24,7 @@ from .core import HOME, VAR, log, now
 # dependency order: base first. worker.py is not in it: it runs the loops, see load_worker.
 ORDER = ["core", "site", "db", "slack", "voice_lint", "sentlearn", "gh", "worktree", "claude", "muse", "cases", "precedents", "gates",
          "finders", "trace", "bridge", "learn", "context", "alerts", "merge_order", "outbound", "report", "approvals", "replies", "tasks",
-         "babysit", "reviews", "epics", "closing", "digest", "board", "dm", "patrol", "backfill", "outcomes", "ingest",
+         "babysit", "precheck", "reviews", "epics", "closing", "digest", "board", "dm", "patrol", "backfill", "outcomes", "ingest",
          "evals", "triage", "dash", "console", "stale", "incidents", "observer", "guardcall", "impact", "dedupe", "escalate", "repro", "chat", "hot"]
 LOCK = threading.Lock()
 

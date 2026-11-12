@@ -262,13 +262,18 @@ CLAUDE_ROUTES = [
     # "draft", not "draft-", and "claude-": the rule gate (evals.run_signal) replays the bare `draft` lane and the Claude
     # roles' lanes (claude-fix...), which went to the free model and hung 20-30 min a call (2026-10-06/07: 11 timeouts,
     # every one swallowed, the gate read 0.0 vs 0.0 and accepted)
-    (("investigate", "plan", "comments", "draft", "reply", "claude-"), "opus", ("Read", "Grep", "Glob")),
+    # sorting a pull request's review comments is a first pass: comments_verify (Opus) confirms every fix and writes
+    # every defense after it, and was written for "a cheaper model's triage"
+    (("comments",), "sonnet", ("Read", "Grep", "Glob")),
+    (("investigate", "plan", "draft", "reply", "claude-"), "opus", ("Read", "Grep", "Glob")),
     (("review-own-",), "sonnet", ("Read", "Grep", "Glob")),  # 2026-09-29: finders on our own PRs are bulk reading; Opus verifies
     (("review-",), "opus", ("Read", "Grep", "Glob")),  # 2026-09-23: "we need a good model for reviews"
     (("learn", "judge"), "opus", ()),  # rules that shape every prompt are not a free-model job
     (("patrol",), "sonnet", ("Read", "Grep", "Glob")),  # 2026-09-27: free model returned no usable JSON 6 runs in a row
 ]
 _claude_sem = threading.BoundedSemaphore(8)
+# mid-tier lanes whose failed call is asked again of Opus instead of failing the stage ("escalating if it fails")
+STEP_UP = ("comments", "ci-diagnose")
 
 
 def _claude_route(lane: str):
@@ -299,8 +304,17 @@ def _via_claude(agent, prompt, schema, cwd, lane, item_id, timeout, model, tools
     # (10 dossiers from #909 on wrote 'reading slack-context.md was denied'; critique always passed the dir)
     add = (str(VAR),) if str(VAR) in prompt else ()
     with _claude_sem, pool, claude.caller_ctx(lane if lane != agent else None):
-        out = claude.lean(role, prompt, model=model, cwd=cwd, schema=schema, tools=tools, item_id=item_id, add_dirs=add,
-                          timeout=min(timeout or 900, 1500 if lane.startswith("review") else 900), urgent=True)
+        kw = dict(cwd=cwd, schema=schema, tools=tools, item_id=item_id, add_dirs=add,
+                  timeout=min(timeout or 900, 1500 if lane.startswith("review") else 900), urgent=True)
+        try:
+            out = claude.lean(role, prompt, model=model, **kw)
+        except claude.Interrupted:
+            raise
+        except claude.ClaudeError as e:
+            if model != "sonnet" or lane not in STEP_UP or "credit balance" in str(e).lower():
+                raise
+            log("muse: mid-tier call failed, asking Opus", lane=lane, item=item_id, err=str(e)[:200])
+            out = claude.lean(role, prompt, model="opus", **kw)
     if schema:
         return out
     return out.get("text", "") if isinstance(out, dict) else out
@@ -308,12 +322,15 @@ def _via_claude(agent, prompt, schema, cwd, lane, item_id, timeout, model, tools
 
 def call(agent: str, prompt: str, *, cwd: str, schema: dict | None = None, lane: str | None = None,
          item_id: int | None = None, timeout: int | None = None, retries: int = 2,
-         model: str | None = None) -> dict | list | str:
+         model: str | None = None, claude_model: str | None = None) -> dict | list | str:
     """Run one Muse turn-loop headless. Returns parsed JSON when a schema is given. A pinned `model` skips the Claude
     routes and the free chain: a rate limit on it raises MuseRateLimited at once (the code scanner runs it beside Haiku
-    and keeps going without it)."""
+    and keeps going without it). `claude_model` asks the lane's question of that Claude tier instead of the lane's own
+    (a mid-tier answer that settled nothing, asked again of Opus)."""
     lane = lane or agent
     route = None if model else _claude_route(lane)
+    if claude_model and not model:
+        route = (claude_model, (route or (None, ("Read", "Grep", "Glob")))[1])
     if route is None and not site.feature("free_models"):
         # an install without the free models has one place to think, the provider its user chose. The lanes the first
         # install leaves to a free model (and a call that pins one) run there on the mid tier, read-only: left to the

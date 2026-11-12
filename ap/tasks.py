@@ -1317,7 +1317,21 @@ def _size_over(it: dict, part: dict) -> bool:
     return True
 
 
-def _to_fix(it: dict, part: dict, problems: list[str], source: str) -> None:
+MECHANICAL = ("mechanical: true only when EVERY problem has one obvious fix that changes no behaviour: formatting, a lint "
+              "rule, an unused or missing import, a type annotation, a generated file, a lockfile or a snapshot to "
+              "refresh, a renamed symbol to follow. false when a test of behaviour fails, when logic is wrong, when "
+              "the fix needs a decision, or when you are not sure.")
+
+
+def light_round(d: dict, mechanical: bool) -> tuple[bool, bool]:
+    """(this fix round starts on the lighter model, the case has stepped up to Opus for good). A round is light only
+    when its problems were judged mechanical and no light round ran on this case before: one that did and left the
+    case back here did not settle it, whatever the reason, so everything after it is Opus's."""
+    stepped = bool(d.get("fix_stepped_up") or d.get("fix_light"))
+    return bool(mechanical) and not stepped and bool(CFG["quality"].get("light_fixes", True)), stepped
+
+
+def _to_fix(it: dict, part: dict, problems: list[str], source: str, mechanical: bool = False) -> None:
     rounds = it["data"].get("fix_rounds", 0)
     if rounds >= CFG["quality"]["max_fix_rounds"]:
         _save_part(it, part)
@@ -1330,7 +1344,8 @@ def _to_fix(it: dict, part: dict, problems: list[str], source: str) -> None:
         return db.update_item(it["id"], status="blocked", note=f"{source}: fix rounds exhausted",
                               data={"blocked_reason": f"{source} still failing after {rounds} fix rounds:\n" + "\n".join(problems)[:3000],
                                     "blocked_rev": brev})
-    _save_part(it, part, fix_rounds=rounds + 1, fix_problems=problems, fix_source=source)
+    light, stepped = light_round(it["data"], mechanical)
+    _save_part(it, part, fix_rounds=rounds + 1, fix_problems=problems, fix_source=source, fix_light=light, fix_stepped_up=stepped)
     db.update_item(it["id"], status="fix")
 
 
@@ -1503,8 +1518,22 @@ def fix(it: dict) -> None:
               + _later_messages(it)
               + ("\n\nNOTE: uncommitted changes in the worktree may be a previous interrupted attempt at these same fixes: "
                  "read them first, keep what is right." if run(["git", "-C", part["wt"], "status", "--porcelain"]).stdout.replace("?? AP_LEDGER.json", "").strip() else ""))
-    claude.build("fix", prompt, cwd=part["wt"], add_dirs=(READ_ROOT, str(item_dir(it["id"]))), item_id=it["id"],
-                 urgent=it["urgency"] >= 3)
+    kw = dict(cwd=part["wt"], add_dirs=(READ_ROOT, str(item_dir(it["id"]))), item_id=it["id"], urgent=it["urgency"] >= 3)
+    if it["data"].get("fix_light"):
+        try:
+            claude.build("fix", prompt, light=True, **kw)
+        except claude.Interrupted:
+            raise  # stopped from outside (a restart, the reaper): the round resumes as it was
+        except claude.ClaudeError as e:
+            if "credit balance" in str(e).lower():
+                raise  # nothing can be paid for right now: another model fails the same way
+            # the lighter model did not finish the round: Opus does it now, and takes every later one
+            log("fix: light round failed, stepping up", item=it["id"], err=str(e)[:200])
+            db.add_signal("fix_stepped_up", {"why": str(e)[:300]}, it["id"])
+            db.update_item(it["id"], data={"fix_light": False, "fix_stepped_up": True})
+            claude.build("fix", prompt, **kw)
+    else:
+        claude.build("fix", prompt, **kw)
     if it["kind"] == "CI" and _nothing_to_push(part):
         return _no_commit(it, part)  # CI only turns green from a new head: gating the same one is time lost
     db.update_item(it["id"], status="gate")
@@ -1801,6 +1830,7 @@ def _vercel_logs(pr: dict) -> list[str]:
 CI_DIAG = {"type": "object", "required": ["category", "problems", "summary"], "properties": {
     "category": {"type": "string", "enum": ["code", "flaky", "base_breakage", "waits_for_deploy", "needs_push", "infra", "unknown"]},
     "problems": {"type": "array", "items": {"type": "string"}},
+    "mechanical": {"type": "boolean", "description": "for category code: " + MECHANICAL},
     "waits_for": {"type": "string"}, "summary": {"type": "string"}}}
 
 
@@ -1861,23 +1891,26 @@ def ci_fix(it: dict) -> None:
     (item_dir(it["id"]) / f"ci-{rounds}.log").write_text("\n\n".join(logs))
     deps = [dict(r) for r in db.q("SELECT dep_repo, dep_number, need, reason FROM merge_deps WHERE repo=? AND number=?",
                                   part["repo"], part["pr"])]
-    diag = muse.call("ap-investigate", f"Diagnose the CI failures of {part['pr_url']} (branch {part['branch']}, worktree "
+    ask = (f"Diagnose the CI failures of {part['pr_url']} (branch {part['branch']}, worktree "
                      f"{part['wt']}). Categories: code (this branch's diff is wrong: list file, cause, fix), flaky, "
                      f"base_breakage (the default branch or a merge from it is broken, not this diff), waits_for_deploy "
                      f"(the Vercel preview regenerates API types from DEV backends: types this branch uses are missing "
                      f"because a backend change is not deployed to dev yet; that is red BY DESIGN, never 'fix' it by "
                      f"guarding imports), needs_push (something that only runs on a push never ran for this head, e.g. "
                      f"no Vercel status at all, not even pending or failed: a rerun of Actions does not send the push "
-                     f"again, only a new head does), infra, unknown. Known merge dependencies of this PR: {json.dumps(deps, ensure_ascii=False)}"
-                     f"\n\nLogs (GitHub Actions + Vercel build logs): {item_dir(it['id']) / f'ci-{rounds}.log'}",
-                     cwd=part["wt"], schema=CI_DIAG, lane="ci-diagnose", item_id=it["id"])
+                     f"again, only a new head does), infra, unknown. For code, also say whether the fix is mechanical. Known merge dependencies of this PR: {json.dumps(deps, ensure_ascii=False)}"
+                     f"\n\nLogs (GitHub Actions + Vercel build logs): {item_dir(it['id']) / f'ci-{rounds}.log'}")
+    diag = muse.call("ap-investigate", ask, cwd=part["wt"], schema=CI_DIAG, lane="ci-diagnose", item_id=it["id"])
+    if diag["category"] == "unknown":
+        # the mid tier could not place it: the question goes up once before a person is asked
+        diag = muse.call("ap-investigate", ask, cwd=part["wt"], schema=CI_DIAG, lane="ci-diagnose", item_id=it["id"], claude_model="opus")
     cat = diag["category"]
     diag = {**diag, "head": pr["headRefOid"], "checks": it["data"].get("failed_checks") or []}
     db.update_item(it["id"], data={"ci_rounds": rounds, "ci_diag": diag})
     if cat == "code":
         if rounds > CFG["quality"]["max_fix_rounds"]:  # our own fixes keep failing: that is the only dead end
             return db.update_item(it["id"], status="blocked", data={"blocked_reason": "CI still red after fixes:\n" + "\n".join(diag["problems"])[:1500]})
-        return _to_fix(db.item(it["id"]), part, diag["problems"], "ci")
+        return _to_fix(db.item(it["id"]), part, diag["problems"], "ci", mechanical=bool(diag.get("mechanical")))
     default = CFG["repos"][part["repo"]]["default"]
     if cat == "needs_push":
         # reruns replay Actions on the same head and never send the push webhook again: a new head does, once. A

@@ -82,7 +82,7 @@ def poll() -> int:
         text = f"{key} {i['summary']}\n{i['description']}"
         if key in seen:
             continue
-        if first and _age_days(i["updated"]) > FIRST_SYNC_DAYS:
+        if first and (_age_days(i["updated"]) > FIRST_SYNC_DAYS or site.backlog(i["updated"])):
             seen[key] = i["updated"]  # the baseline: older backlog is known, not work the install was asked to start
             continue
         if made >= PER_POLL:

@@ -22,8 +22,13 @@ from .core import CFG, V1, log, now
 DAYS = 14
 
 
+def _since() -> float:
+    """Two weeks back, or where this install's intake starts when that is later (site.intake_since)."""
+    return max(time.time() - DAYS * 86400, site.intake_since())
+
+
 def _slack_corpus() -> str:
-    oldest = f"{time.time() - DAYS * 86400:.6f}"
+    oldest = f"{_since():.6f}"
     chans = {c: slack.channel_name(c).lstrip("#")
              for c in (CFG.get("team_channel"), CFG.get("pr_channel"), *CFG.get("watched_channels", [])) if c}
     me, team = CFG["self_user_id"], set(CFG.get("team_members", {})) - {"_note"}
@@ -55,7 +60,7 @@ def _slack_corpus() -> str:
     mentions, self_dm = [], CFG["self_dm_channel"]
     for qy in queries:
         try:
-            ms = slack.search(f"{qy} -in:<#{self_dm}> after:{time.strftime('%Y-%m-%d', time.localtime(time.time() - DAYS * 86400))}", count=100)
+            ms = slack.search(f"{qy} -in:<#{self_dm}> after:{time.strftime('%Y-%m-%d', time.localtime(_since()))}", count=100)
         except Exception:
             continue
         ms = [m for m in ms if (m.get("channel") or {}).get("id") != self_dm]
@@ -150,6 +155,9 @@ def jira_sweep() -> int:
                          f"key): covered_by_pr (an open PR fixes it; list which), needs_work (nothing covers it yet), stale (old "
                          f"backlog with no recent activity or superseded), not_mine. Read code/PRs when needed.",
                          cwd=site.primary_path(), schema=schema, lane="backfill-jira")["tickets"]
+    issues = [i for i in issues if not site.backlog(i.get("updated"))]  # untouched since before this install started
+    if not issues:
+        return 0
     by_key = {i["key"]: i for i in issues}
     verdicts = [t for t in classify(issues) if t.get("key") in by_key]
     # A ticket the classifier left out is not a verdict (2026-10-06 06:25: 11 tickets in, '{"tickets": []}' out, so
@@ -199,6 +207,8 @@ def jira_sweep() -> int:
 
 
 def v1_leftovers() -> int:
+    if not site.internal():
+        return 0  # the files of the first install's earlier assistant: no other install has any
     blobs = []
     for f in sorted((V1 / "state/queue").glob("pending-*.json"))[-40:] + sorted((V1 / "queue").glob("pending-*.json"))[-40:]:
         try:

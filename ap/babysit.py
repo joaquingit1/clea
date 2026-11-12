@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import approvals, claude, db, gh, merge_order, muse, outbound, site, worktree, slack
 from .core import CFG, item_dir, log, now, run
-from .tasks import READ_ROOT, SELF_VERIFY
+from .tasks import MECHANICAL, READ_ROOT, SELF_VERIFY, light_round
 
 BOTS = merge_order.BOTS
 # a case in these owns its PR's CI and threads: babysit opens no CI/COMMENTS item beside it. `waiting` is one of them
@@ -105,6 +105,10 @@ def _one(repo: str, n: int, pr: dict, stats: dict) -> None:
         return
     green, pending, failed = _check_rollup(pr)
     managed = _managed(repo, n)
+    if not st and not managed and site.backlog(pr.get("updatedAt")):
+        # open since before this install started and untouched since: not work it was asked to take on. The first
+        # push, comment or review on it makes it current, and then its red CI and open threads are picked up as usual
+        return
     # 1. CI red, or the branch conflicts with its base (nothing turns that green by itself)
     conflicting = pr.get("mergeable") == "CONFLICTING"
     if (failed or conflicting) and not managed and st.get("ci_sha") != pr["headRefOid"]:
@@ -408,7 +412,9 @@ def comments_verify(it: dict) -> None:
                     "cheaper "
                     f"model's triage. Confirm which ones require a code fix (confirmed) and which are wrong or "
                     f"deliberate (dismissed, with the defense).\nComments: {d / 'comments.json'}\n"
-                    f"Triage: {d / 'comments-triage.json'}", cwd=part["wt"], schema=SELF_VERIFY,
+                    f"Triage: {d / 'comments-triage.json'}\nAlso answer `mechanical` for the confirmed ones together. "
+                    + MECHANICAL, cwd=part["wt"],
+                    schema={**SELF_VERIFY, "properties": {**SELF_VERIFY["properties"], "mechanical": {"type": "boolean"}}},
                     add_dirs=(str(d), READ_ROOT), item_id=it["id"])
     (d / "comments-verify.json").write_text(json.dumps(v, ensure_ascii=False, indent=1))
     part["defenses"] = v["dismissed"]
@@ -424,8 +430,9 @@ def comments_verify(it: dict) -> None:
             except Exception as e:
                 log("review lesson failed", item=it["id"], err=str(e)[:160])
             db.update_item(it["id"], data={"lesson_done": True})
+        light, stepped = light_round(it["data"], bool(v.get("mechanical")))
         return db.update_item(it["id"], status="fix", data={
-            "parts": it["data"]["parts"], "fix_rounds": 0, "fix_source": "review comments",
+            "parts": it["data"]["parts"], "fix_rounds": 0, "fix_source": "review comments", "fix_light": light, "fix_stepped_up": stepped,
             "fix_problems": [f"{c['file']}:{c.get('line', '')} {c['problem']} -> {c['fix']}" for c in v["confirmed"]]})
     db.update_item(it["id"], status="comments_reply", data={"parts": it["data"]["parts"]})
 

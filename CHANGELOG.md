@@ -3,6 +3,23 @@
 Notable changes to Clea. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **A new install starts from now.** It used to take on everything it could see on its first start: every open pull
+  request with red CI or an open thread, every pull request waiting for a review, a week of tickets and two weeks of
+  Slack. It now takes on what moved in the two days before setup and everything after (`intake.backlog_days`).
+- **A free look at GitHub before each paid stage.** A case whose pull request merged or closed, whose check is no
+  longer red or whose threads were resolved ends there, without a model call.
+- **Mechanical fix rounds start on Sonnet** and step up to Opus for the rest of the case when one fails or its problem
+  returns (`quality.light_fixes`). Sorting review comments runs on Sonnet; Opus still confirms every fix and writes
+  every defense. A CI diagnosis that comes back "unknown" is asked again of Opus.
+- **Lighter sessions.** A code session no longer carries the subagent, task and skill tools it almost never called
+  (about a third of its opening context, re-sent on every turn; `claude.repo_skills` keeps a repository's own skills).
+  Every session is told to make independent lookups in one turn, and each stage of a case passes the next the files
+  it opened, so they are not searched for again.
+
 ## [0.2.1] - 2026-11-10
 
 ### Added

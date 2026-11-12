@@ -106,6 +106,40 @@ checks Slack every 60 seconds. Create it on your app's page under Basic Informat
 | `pins:write` | Pin the board in your own DM |
 
 
+## What a new install takes on
+
+Clea starts from the day you set it up, not from your backlog. It takes on what moved in the two days before setup
+and everything after: a ticket, a review request or one of your own pull requests that was last touched before that
+is left alone until something happens on it (a push, a comment, a new assignment). To change the window, set the
+number of days in `<CLEA_HOME>/config.json`; `0` starts from the moment setup finished:
+
+```json
+{ "intake": { "backlog_days": 2 } }
+```
+
+## What keeps the cost down
+
+- **A free look before a paid stage.** Before a session starts on a pull request, Clea asks GitHub whether there is
+  still anything to do. A pull request that merged or closed, a check that is no longer red or threads that
+  were resolved meanwhile end the case without a model call.
+- **Mechanical fixes start on the mid-tier model.** When every problem in a fix round has one obvious fix that changes
+  no behaviour (formatting, lint, an import, a type annotation, a generated file), the round starts on Sonnet. If it
+  fails, or the problem comes back, the case goes to Opus and stays there. Builds, plans, reviews and anything that
+  needs judgement always run on Opus. To keep every fix on Opus:
+
+```json
+{ "quality": { "light_fixes": false } }
+```
+
+- **Sessions carry less and look things up together.** A code session is given the tools it uses (read, edit,
+  search, shell) and not the ones it does not, and is told to ask for independent lookups in one turn. Each stage of
+  a case also hands the next one the list of files it opened. If your repositories ship their own Claude Code skills
+  (`.claude/skills`) and you want code sessions to load them, turn them on:
+
+```json
+{ "claude": { "repo_skills": true } }
+```
+
 ## Checks before a pull request
 
 Clea detects how each repository checks itself (Node, Python, Go, Rust, Makefile). To name the commands yourself, list

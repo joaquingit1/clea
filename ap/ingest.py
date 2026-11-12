@@ -738,7 +738,7 @@ def pr_channel_reviews(days: int = 14) -> int:
         return 0
     db.kv_set("pr_channel_read_at", now())
     links = []
-    for m in slack.history(ch, f"{now() - days * 86400:.6f}", pages=2):
+    for m in slack.history(ch, f"{max(now() - days * 86400, site.intake_since()):.6f}", pages=2):
         if m.get("user") == SELF or m.get("bot_id") or (m.get("thread_ts") and m.get("thread_ts") != m["ts"]):
             continue  # his own PRs are his to deliver; thread replies discuss a PR already posted
         for repo, n in _PR_LINK.findall(m.get("text") or ""):
@@ -759,11 +759,13 @@ def pr_channel_reviews(days: int = 14) -> int:
             continue
         db.kv_set(k, {"state": pr["state"], "at": now()})
         if pr["state"] == "OPEN":
-            made += _maybe_review_item(repo, pr, requested=True)
+            made += _maybe_review_item(repo, pr, requested=True, asked_now=True)
     return made
 
 
-def _maybe_review_item(repo: str, p: dict, requested: bool = False) -> int:
+def _maybe_review_item(repo: str, p: dict, requested: bool = False, asked_now: bool = False) -> int:
+    """`asked_now`: someone posted it for review inside the intake window (the PR channel), so the request is current
+    however long the pull request itself sat untouched."""
     key = f"review:{repo}#{p['number']}"
     if db.open_item_for_thread(key) or gh.bot_author(p.get("author")):
         return 0  # a bot PR is never reviewed: no case to drop again at each new head
@@ -774,8 +776,8 @@ def _maybe_review_item(repo: str, p: dict, requested: bool = False) -> int:
     if last and json.loads(last["data"]).get("head_sha") == p["headRefOid"]:
         return 0  # already reviewed this exact head
     age_days = (time.time() - time.mktime(time.strptime(p["updatedAt"][:19], "%Y-%m-%dT%H:%M:%S"))) / 86400
-    if age_days > 14:
-        return 0
+    if age_days > 14 or (not asked_now and site.backlog(p.get("updatedAt"))):
+        return 0  # the second: found by a search, and untouched since before this install started (site.intake_since)
     db.create_item("REVIEW", "review_prepare", f"review {repo}#{p['number']}: {p['title'][:80]}", key,
                    repo=repo, pr=p["number"], urgency=2,
                    data={"head_sha": p["headRefOid"], "author": (p.get("author") or {}).get("login"),

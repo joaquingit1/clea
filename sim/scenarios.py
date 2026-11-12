@@ -885,3 +885,126 @@ def jira_and_slack_same_ticket(s: Sim, ok: Checks):
     tickets.poll()
     work = open_cases(s, "TASK") + open_cases(s, "INCIDENT")
     ok(len(work) == 1, "one open work case for ENG-7", [(c["kind"], c["thread_key"], c["status"]) for c in s.cases()])
+
+
+# ---- spending: what a case costs before anyone asked for it -----------------------------------------------------------
+import time as _time
+
+NEW_INSTALL = {**JIRA, "setup": {"completed_at": int(_time.time())}}
+RED = [{"name": "ci", "status": "COMPLETED", "conclusion": "FAILURE"}]
+GREEN = [{"name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}]
+
+
+def _days_ago(days: float) -> str:
+    return _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(_time.time() - days * 86400))
+
+
+@scenario("spend", "A new install starts from now: what was last touched more than two days before it was set up is not taken on", config=NEW_INSTALL)
+def starts_from_now(s: Sim, ok: Checks):
+    from ap import babysit, core, ingest, site, tickets
+    ok(site.intake_since() > 0 and site.backlog(_days_ago(5)) and not site.backlog(_days_ago(1)) and not site.backlog("not a date"),
+       "the line is two days before setup, and a time that cannot be read is never called backlog", site.intake_since())
+    _jira(s, [{"key": "ENG-1", "summary": "moved five days ago", "updated": _stamp(5)},
+              {"key": "ENG-2", "summary": "moved yesterday", "updated": _stamp(1)}])
+    tickets.poll()
+    tickets.poll()
+    ok([c["thread_key"] for c in s.cases("TASK")] == ["jira:ENG-2"], "only the ticket that moved inside the window is a case",
+       [c["thread_key"] for c in s.cases("TASK")])
+    old = s.world.pr("web", 21, "bo-chen", "feat(cart): an old one", updatedAt=_days_ago(5))
+    new = s.world.pr("web", 22, "bo-chen", "feat(cart): a current one")
+    made = ingest._maybe_review_item("web", old, requested=True) + ingest._maybe_review_item("web", new, requested=True)
+    ok(made == 1 and [c["pr"] for c in s.cases("REVIEW")] == [22], "a review is opened for the current pull request only",
+       [(c["pr"], c["status"]) for c in s.cases("REVIEW")])
+    s.world.pr("web", 24, "bo-chen", "feat(cart): old, but asked for today", updatedAt=_days_ago(5))
+    s.world.post(PR_CH, BO, "can someone look at this one? https://github.com/acme/web/pull/24")
+    db.kv_set("pr_channel_read_at", 0)
+    ingest.pr_channel_reviews()
+    ok(sorted(c["pr"] for c in s.cases("REVIEW")) == [22, 24], "a review someone asks for today counts, however old the pull request",
+       [(c["pr"], c["status"]) for c in s.cases("REVIEW")])
+    mine = s.world.pr("web", 23, core.CFG["self_github"], "fix(cart): red for a week", updatedAt=_days_ago(5), statusCheckRollup=RED)
+    stats = {"prs": 0, "merged": 0, "items": 0}
+    babysit._one("web", 23, mine, stats)
+    ok(stats["items"] == 0 and not s.cases("CI") and not db.kv_get("pr:web#23"),
+       "his own pull request, red and untouched since before the install, is left alone", [c["title"] for c in s.cases("CI")])
+    ok(not s.model.calls, "none of it cost a model call", [c[0] for c in s.model.calls])
+
+
+@scenario("spend", "An install with no setup date (the first one) keeps its own windows: nothing is called backlog")
+def no_setup_date_no_line(s: Sim, ok: Checks):
+    from ap import ingest, site
+    ok(site.intake_since() == 0 and not site.backlog(_days_ago(400)), "no line", site.intake_since())
+    old = s.world.pr("web", 21, "bo-chen", "feat(cart): five days old", updatedAt=_days_ago(5))
+    ok(ingest._maybe_review_item("web", old, requested=True) == 1, "a five day old pull request is still reviewed there")
+
+
+def _pr_case(s: Sim, kind: str, status: str, number: int, **pr) -> int:
+    from ap import core
+    p = s.world.pr("web", number, core.CFG["self_github"], f"fix(cart): case {number}", **pr)
+    part = {"repo": "web", "branch": p["headRefName"], "wt": "/nonexistent/sim", "pr": number, "pr_url": p["url"], "state": "pushed"}
+    return db.create_item(kind, status, f"{kind.lower()} web#{number}", f"{kind.lower()}:web#{number}", repo="web", pr=number,
+                          data={"parts": [part], "cur": 0, "comments": [{"id": 1, "thread_id": "T1", "body": "rename this"}]})
+
+
+@scenario("spend", "Before a paid stage, a free look at GitHub: when the pull request merged or closed, its check is no longer red or its threads were resolved, no model is asked")
+def nothing_left_to_do(s: Sim, ok: Checks):
+    from ap import precheck, worker
+    pr = s.world.pr("web", 31, "bo-chen", "feat(cart): merged before the review")
+    rid = db.create_item("REVIEW", "review_find", "review web#31", "review:web#31", repo="web", pr=31, data={"head_sha": pr["headRefOid"]})
+    pr["state"] = "MERGED"
+    worker.run_stage(db.item(rid))
+    ok(s.case(rid)["status"] == "dropped" and "no longer needed" in s.notes(rid)[-1], "the review of a merged pull request is dropped", s.notes(rid))
+    green = _pr_case(s, "CI", "ci_fix", 32, statusCheckRollup=GREEN)
+    worker.run_stage(db.item(green))
+    ok(s.case(green)["status"] == "ci_wait", "a CI case whose check is green now goes back to reading CI, not to a fix", s.notes(green))
+    closed = _pr_case(s, "COMMENTS", "comments_triage", 33, statusCheckRollup=GREEN)
+    s.world.prs[("web", 33)]["state"] = "CLOSED"
+    worker.run_stage(db.item(closed))
+    ok(s.case(closed)["status"] == "dropped", "a comments case on a closed pull request is dropped", s.notes(closed))
+    ci = _pr_case(s, "CI", "ci_fix", 34, statusCheckRollup=RED)
+    db.create_item("COMMENTS", "waiting", "comments web#34", "comments:web#34", repo="web", pr=34, data=s.case(ci)["data"])
+    ok(precheck.settled(db.item(ci)) is False and s.case(ci)["status"] == "ci_fix",
+       "a comments case that is only waiting on the same pull request does not end a red CI case", s.notes(ci))
+    resolved = _pr_case(s, "COMMENTS", "comments_triage", 35, statusCheckRollup=GREEN)
+    worker.run_stage(db.item(resolved))
+    ok(s.case(resolved)["status"] == "done", "a comments case whose threads were resolved meanwhile is done", s.notes(resolved))
+    ok(not s.model.calls, "none of the four cost a model call", [c[0] for c in s.model.calls])
+    red = _pr_case(s, "CI", "ci_fix", 36, statusCheckRollup=RED)
+    ok(precheck.settled(db.item(red)) is False and s.case(red)["status"] == "ci_fix", "a check that is still red is still work", s.notes(red))
+    s.world.prs.pop(("web", 36))
+    ok(precheck.settled(db.item(red)) is False, "a pull request that cannot be read settles nothing: the stage runs as before")
+
+
+@scenario("spend", "A mechanical fix starts on the lighter model once; when it fails or the problem returns, the case is Opus's from then on")
+def mechanical_fix_steps_up(s: Sim, ok: Checks):
+    import tempfile
+    from ap import tasks
+    part = {"repo": "web", "branch": "feature-41", "wt": tempfile.mkdtemp(prefix="sim-fix-"), "state": "built"}
+
+    def case(key: str) -> int:
+        return db.create_item("TASK", "gate", f"a fix {key}", f"test:{key}", repo="web", data={"parts": [dict(part)], "cur": 0})
+
+    a = case("returns")
+    tasks._to_fix(db.item(a), dict(part), ["lint: unused import in cart.py"], "ci", mechanical=True)
+    ok(s.case(a)["status"] == "fix" and s.case(a)["data"]["fix_light"] is True, "a mechanical round is marked light", s.case(a)["data"].get("fix_light"))
+    tasks.fix(db.item(a))
+    ok(s.model.built[-1] == ("fix", True), "and its session starts on the lighter model", s.model.built)
+    tasks._to_fix(db.item(a), dict(part), ["lint: unused import in cart.py"], "gate", mechanical=True)
+    d = s.case(a)["data"]
+    ok(d["fix_light"] is False and d["fix_stepped_up"] is True, "the same case back in fix is no longer light, even for a mechanical problem", d)
+    tasks.fix(db.item(a))
+    ok(s.model.built[-1] == ("fix", False), "its next session is Opus's", s.model.built)
+
+    b = case("judgement")
+    tasks._to_fix(db.item(b), dict(part), ["test_total_with_coupon fails: 8.50 != 8.49"], "ci", mechanical=False)
+    tasks.fix(db.item(b))
+    ok(s.case(b)["data"]["fix_light"] is False and s.model.built[-1] == ("fix", False), "a fix that needs judgement never starts light", s.model.built)
+
+    c = case("gives-up")
+    tasks._to_fix(db.item(c), dict(part), ["format: run the formatter"], "ci", mechanical=True)
+    s.model.fail_light = True
+    n = len(s.model.built)
+    tasks.fix(db.item(c))
+    d = s.case(c)["data"]
+    ok(s.model.built[n:] == [("fix", True), ("fix", False)] and d["fix_stepped_up"] is True and s.case(c)["status"] == "gate",
+       "a light session that fails is done again by Opus in the same round, and the case moves on", (s.model.built[n:], s.case(c)["status"]))
+

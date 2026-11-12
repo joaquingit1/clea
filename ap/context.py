@@ -38,7 +38,7 @@ SCHEMA = {"type": "object", "required": ["summary", "priorities", "active_work",
 
 
 def _corpus() -> str:
-    oldest = f"{time.time() - DAYS * 86400:.6f}"
+    oldest = f"{max(time.time() - DAYS * 86400, site.intake_since()):.6f}"
     alerts, mine = CFG.get("alerts_channel"), f" ({site.marker()})"
     chans = {c: slack.channel_name(c).lstrip("#")
              for c in (CFG.get("team_channel"), CFG.get("pr_channel"), alerts, *CFG.get("watched_channels", [])) if c}
@@ -176,6 +176,8 @@ def create_missing(missing: list[dict], source: str) -> int:
             if not msg:
                 continue
         ts, root = msg["ts"], msg.get("thread_ts") or msg["ts"]
+        if site.backlog(ts):
+            continue  # asked before this install started: not work it was asked to take on (site.intake_since)
         key = f"slack:{ch}:{root}"  # same key ingest/triage use for that conversation: one item per thread, any source
         if db.open_item_for_thread(key) or db.q1("SELECT 1 FROM items WHERE thread_key=? AND created_at>?", key, now() - 7 * 86400):
             continue

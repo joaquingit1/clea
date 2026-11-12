@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import subprocess
 import time
 
 from . import db, providers, site
-from .core import CFG, CODE, HOME, KNOWLEDGE, PROMPTS, RULES, STYLE, VAR, log, run
+from .core import CFG, CODE, HOME, KNOWLEDGE, PROMPTS, RULES, STYLE, VAR, item_dir, log, run
 
 EMPTY_MCP = '{"mcpServers":{}}'
 BUILD_DENY = [
@@ -51,7 +52,20 @@ CODE_ENV = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1", "BASH_MAX_TIMEOUT_MS": 
 # Now only the repo's own settings load (its CLAUDE.md files, nested ones included, and its hooks); his global
 # CLAUDE.md and the routed skill sections are in the system prompt (system_file); 7 engineering skills stay
 # loadable on demand (plugin/clea). Measured on a schools worktree: 51.5k -> ~41k starting context.
-CODE_TOOLS = ["Read", "Edit", "Write", "Grep", "Glob", "Bash", "Agent", "Skill", "TaskCreate", "TaskUpdate", "TaskList"]
+# 2026-11-12: every tool a session can call is described to it on every turn. Of 176 sessions on 11-10, three called
+# Agent and fourteen a task tool, yet their definitions (Agent 7.5k characters, the three task tools 13.5k, Skill 3.4k)
+# and the listings that come with them (14 built-in skills, the agent types) rode along on all 1,798 turns of the code
+# sessions: about 8k tokens a turn, a tenth of everything the install read that day. A code session gets what it uses.
+# The first install keeps Skill (its engineering skills load on demand) and, in a build, Agent (its brief asks for a
+# subagent review); an install without personal skills gets neither, and no skill listing, unless its repos carry
+# skills of their own that its sessions should load (config claude.repo_skills).
+CODE_TOOLS = ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
+
+
+def code_tools(role: str, personal: bool, repo_skills: bool = False) -> list[str]:
+    return CODE_TOOLS + (["Skill"] if personal or repo_skills else []) + (["Agent"] if personal and role == "build" else [])
+
+
 NO_AUTO_MEMORY = {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
 
 
@@ -95,6 +109,15 @@ def render(text: str) -> str:
     return text
 
 
+# 2026-11-12: 76% of the turns of a day's sessions made one tool call, and 955 of 2,871 sat in runs of single read-only
+# lookups (a sed, a cat, a grep, one file). A turn re-sends the whole conversation, so the cost of a session is its
+# turns times its context, not what it reads: the new material of that day was 2M tokens, the re-sent context 135M.
+LOOKUPS = ("\n\n## Lookups\nWhen you need several files, searches or read-only commands and none depends on another's "
+           "result, ask for them together: several tool calls in the same turn, not one per turn. Every turn re-sends "
+           "this whole conversation, so five lookups made one at a time cost about five times what the same five cost "
+           "in one turn. Decide what you need to see next, then ask for all of it at once.")
+
+
 def system_file(role: str, cwd: str | None = None) -> str:
     """Render prompts/claude/<role>.md with style guides and the role's learned-rules pack
     into var/prompts/. Written only when the content changes, so the prompt prefix stays
@@ -121,6 +144,7 @@ def system_file(role: str, cwd: str | None = None) -> str:
     text = text.replace("{{STYLE_REVIEW}}", style_file("review.md"))
     text = text.replace("{{STYLE_SLACK}}", style_text())
     text += "\n\n## Truth hierarchy (applies to every claim you make)\n" + render(prompt_path("truth").read_text())
+    text += LOOKUPS
     pack = RULES / f"claude-{role}.md"
     db.touch_rules([f"claude-{role}"])
     if pack.exists() and pack.read_text().strip():
@@ -399,12 +423,117 @@ def resume_for(item_id, role) -> str | None:
     return r.get("sid") if r and r.get("at", 0) > time.time() - 86400 else None
 
 
+def _project_dir(cwd: str) -> Path:
+    """Where the CLI keeps the transcripts of sessions started in `cwd`: the path with every character that is not a
+    letter or a digit turned into a dash (a space and a dot too: 'Application Support/Clea/install-0.2' has both)."""
+    return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(Path(cwd).resolve()))
+
+
+FILES_SHOWN = 25
+_READERS = ("cat", "sed", "head", "tail", "less", "nl")
+_PATHISH = re.compile(r"(?<![\w./-])(/?[\w.-]+(?:/[\w.-]+)+\.\w{1,6})(?![\w/-])")
+
+
+def _repo_rel(path: str) -> tuple[str, str] | None:
+    """(repo, path inside it) for a file in one of the install's repos: a case worktree, the read-only mirror, or the
+    user's own clone. None for anything else (the case's own notes, memory files, /tmp)."""
+    for marker in ("/worktrees/", "/mirror/"):
+        if marker in path:
+            name, _, rel = path.split(marker, 1)[1].partition("/")
+            repo = name.split("--", 1)[0]
+            return (repo, rel) if rel and repo in site.repos() else None
+    for name, r in site.repos().items():
+        root = str(r.get("path") or "").rstrip("/")
+        if root and path.startswith(root + "/"):
+            return name, path[len(root) + 1:]
+    return None
+
+
+def note_files(item_id, sid: str | None, cwd: str) -> None:
+    """After a session of a case: which repo files it opened and which it changed, read from its transcript (no model
+    call) and kept with the case. Each stage of a case used to start cold and find the same files again, a lookup a
+    turn: on 2026-11-10 one service file was opened 19 times across the sessions of one case."""
+    if item_id is None or not sid:
+        return
+    try:
+        f = _project_dir(cwd) / f"{sid}.jsonl"
+        if not f.exists():
+            return
+        seen: dict[str, dict] = {}
+
+        def hit(path: str, changed: bool = False) -> None:
+            path = path if path.startswith("/") else str(Path(cwd) / path)
+            at = _repo_rel(path)
+            if at:
+                e = seen.setdefault(f"{at[0]}:{at[1]}", {"reads": 0, "changed": False})
+                e["reads"] += 1
+                e["changed"] = e["changed"] or changed
+        for line in f.read_text(errors="replace").splitlines():
+            if '"tool_use"' not in line:
+                continue
+            try:
+                content = (json.loads(line).get("message") or {}).get("content") or []
+            except ValueError:
+                continue
+            for b in content:
+                if not (isinstance(b, dict) and b.get("type") == "tool_use"):
+                    continue
+                name, inp = b.get("name"), b.get("input") or {}
+                if name in ("Read", "Edit", "Write", "MultiEdit") and inp.get("file_path"):
+                    hit(str(inp["file_path"]), name != "Read")
+                elif name == "Bash":
+                    cmd = re.sub(r"^(?:cd\s+(?:\"[^\"]*\"|'[^']*'|\S+)\s*(?:&&|;)\s*)+", "", str(inp.get("command") or "").strip())
+                    if cmd.split(" ", 1)[0] in _READERS:
+                        for p in _PATHISH.findall(cmd)[:6]:
+                            hit(p)
+        if not seen:
+            return
+        store = item_dir(item_id) / "files.json"
+        known = json.loads(store.read_text()) if store.exists() else {}
+        for k, e in seen.items():
+            old = known.get(k) or {"reads": 0, "changed": False}
+            known[k] = {"reads": old["reads"] + e["reads"], "changed": old["changed"] or e["changed"]}
+        store.write_text(json.dumps(known, indent=1))
+    except Exception as e:  # a convenience for the next session, never a reason for this one to fail
+        log("files of the session not recorded", item=item_id, err=f"{type(e).__name__}: {e}"[:200])
+
+
+def files_note(item_id, cwd: str) -> str:
+    """What the next session of a case is told about the files its earlier sessions used, when it runs in a repo: the
+    ones in that repo that still exist there, changed ones first, then the most read."""
+    if item_id is None:
+        return ""
+    try:
+        store = item_dir(item_id) / "files.json"
+        here = _repo_rel(str(Path(cwd).resolve()) + "/.")
+        if not store.exists() or not here:
+            return ""
+        repo, sub = here[0], here[1].rstrip(".").strip("/")
+        rows = []
+        for k, e in json.loads(store.read_text()).items():
+            r, _, rel = k.partition(":")
+            if r != repo or (sub and not rel.startswith(sub + "/")):
+                continue
+            local = rel[len(sub) + 1:] if sub else rel
+            if (Path(cwd) / local).is_file():
+                rows.append((not e.get("changed"), -int(e.get("reads") or 0), local, bool(e.get("changed"))))
+        if not rows:
+            return ""
+        rows.sort()
+        lines = "\n".join(f"- {p}" + (" (changed by an earlier session)" if ch else "") for _, _, p, ch in rows[:FILES_SHOWN])
+        return ("\n\nFiles the earlier sessions of this case opened in this repo, most used first. They are a starting "
+                "point, not a limit: open the ones you need together in one turn instead of searching for them again.\n" + lines)
+    except Exception as e:
+        log("files note not built", item=item_id, err=f"{type(e).__name__}: {e}"[:200])
+        return ""
+
+
 def _remember_session(item_id, role, sid: str | None, cwd: str, started: float) -> None:
     """the user: 'when you run out of tokens the thread shouldn't be reset. wait, then send continue to the
     same thread.' The session id comes from the run's JSON, or from the newest transcript the CLI wrote for that cwd."""
     if not sid:
         try:
-            proj = Path.home() / ".claude" / "projects" / str(Path(cwd).resolve()).replace("/", "-")
+            proj = _project_dir(cwd)  # was only "/" to "-": no transcript was ever found under a path with a space or a dot
             cands = [f for f in proj.glob("*.jsonl") if f.stat().st_mtime >= started - 5]
             if cands:
                 sid = max(cands, key=lambda f: f.stat().st_mtime).stem
@@ -675,7 +804,11 @@ def _lean_once(role, prompt, model, cwd, schema, tools, add_dirs, item_id, timeo
         args += ["--add-dir", d]
     if schema:
         args += ["--json-schema", json.dumps(schema)]
+    if tools and not sid and not fast:
+        args[0] = prompt + files_note(item_id, cwd)
     out = _invoke(args, role, item_id, cwd, timeout, env=env)
+    if tools and not fast:
+        note_files(item_id, out.get("session_id"), cwd)
     if schema and out.get("structured_output") is None and out.get("subtype") == "error_max_budget_usd" \
             and out.get("session_id") and not fast:
         # the cap cut the session before it answered, and everything it read was thrown away (10-11 13:11: a $1.56
@@ -704,9 +837,12 @@ class ModelLimited(Exception):
 FALLBACK = {"fable": ["fable", "opus", "sonnet"], "opus": ["opus", "fable", "sonnet"], "sonnet": ["sonnet", "opus"], "haiku": ["haiku", "sonnet"],
             "haiku5": ["haiku5", "haiku", "sonnet"]}
 # code is written by Opus 5.5 (the user, 2026-09-29: "keep fable to the bare minimum, just a greenlight, the rest
-# can be done with opus 5.5"); never anything below Opus. Fable gives the one final verdict before a PR is
-# published (self_review), nothing else.
+# can be done with opus 5.5"). Fable gives the one final verdict before a PR is published (self_review), nothing else.
+# One exception since 2026-11-12 ("try sonnet 5.5 for the mechanical work, and escalating if it fails"): a fix round
+# whose every problem was judged mechanical (tasks._to_fix) starts on Sonnet, and the case goes back to Opus for good
+# the first time such a round fails or its problem returns. A build is never light.
 CODE_CHAIN = ["opus"]
+LIGHT = "sonnet"
 
 
 def _reset_epoch(text: str) -> int | None:
@@ -785,10 +921,12 @@ def pick(model: str) -> str:
 
 
 def build(role: str, prompt: str, *, model: str = "fable", cwd: str, item_id: int | None = None,
-          add_dirs: tuple[str, ...] = (), urgent: bool = False, timeout: int = 5400) -> dict:
+          add_dirs: tuple[str, ...] = (), urgent: bool = False, timeout: int = 5400, light: bool = False) -> dict:
     if not can_spend(role, urgent):
         raise BudgetExhausted(role)
     chain = CODE_CHAIN if role in ("build", "fix") else FALLBACK.get(model, [model])
+    if light and role == "fix":
+        chain = [LIGHT] + chain  # a mechanical fix round (see CODE_CHAIN); capped, it runs on Opus as before
     for m in chain:
         if time.time() < db.kv_get(f"model_limited:{providers.model_id(m)}", 0):
             continue
@@ -813,17 +951,22 @@ def _build_once(role, prompt, model, cwd, item_id, add_dirs, timeout) -> dict:
         prompt = CONTINUE + news_for(item_id)
     from . import skills
     personal = site.feature("personal_skills")
+    repo_skills = bool(CFG["claude"].get("repo_skills"))  # the repos' own.claude/skills, for an install that wants them
     mid = providers.model_id(model)
     args = [prompt, *(["--resume", sid] if sid else []), "--model", mid, "--append-system-prompt-file", system_file(role, cwd),
             "--strict-mcp-config", "--mcp-config", EMPTY_MCP, "--permission-mode", "acceptEdits",
             "--max-budget-usd", str(CFG["claude"]["per_call_usd"].get(role, 10)),
             "--allowedTools", *BUILD_ALLOW, "--disallowedTools", *BUILD_DENY,
             # clean room: the repo's settings only, the routed rules in the system prompt, 7 skills on demand
-            "--setting-sources", "project", *(["--plugin-dir", str(skills.PLUGIN)] if personal else []), "--tools", *CODE_TOOLS,
-            *effort_args(mid), "--settings", code_settings(mid)]
+            "--setting-sources", "project", *(["--plugin-dir", str(skills.PLUGIN)] if personal else []),
+            *([] if personal or repo_skills else ["--disable-slash-commands"]),
+            "--tools", *code_tools(role, personal, repo_skills), *effort_args(mid), "--settings", code_settings(mid)]
     for d in add_dirs:
         args += ["--add-dir", d]
+    if not sid:
+        args[0] = prompt + files_note(item_id, cwd)
     out = _invoke(args, role, item_id, cwd, timeout, env=CODE_ENV)
+    note_files(item_id, out.get("session_id"), cwd)
     try:  # zero tokens: which skills did it still pull on demand? (skills.promote injects the usual ones)
         if personal:
             skills.record(skills.route_of(role, cwd), out.get("session_id"), cwd)
