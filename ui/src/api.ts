@@ -136,7 +136,14 @@ export interface Board {
   prs: OwnPr[];
   blocking: { url: string | null; label: string; text: string }[];
   stats: { prs_week: number; done_week: number; cost_today: number; open: number };
-  health: { rev: string | null; paused_until: number | null; wrong_account: string | null; worker_beat: number | null };
+  health: {
+    rev: string | null;
+    paused_until: number | null;
+    wrong_account: string | null;
+    worker_beat: number | null;
+    /** the model provider refused a call for billing reasons: nothing runs until the user resumes or picks another model */
+    stopped?: { at: number; why: string; provider: string } | null;
+  };
 }
 
 export interface Activity {
@@ -304,6 +311,15 @@ export async function caseAction(id: number, action: "go" | "retry" | "drop" | "
     headers: { "Content-Type": "application/json", "X-AP-Console": "1" },
     body: JSON.stringify({ text }),
   });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+
+/** The user's "resume" after a billing stop: the worker makes one tiny call and, if the provider answers, runs again.
+ *  Resolves to whether it did, with the provider's words when it still refuses. */
+export async function resumeProvider(): Promise<{ ok: boolean; why: string }> {
+  const r = await fetch("/api/setup/provider/resume", { method: "POST", headers: { "Content-Type": "application/json", "X-AP-Console": "1" }, body: "{}" });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
   return j;

@@ -265,7 +265,7 @@ def pool(name: str, statuses: list[str], kinds: list[str] | None = None) -> None
 
 def pool_turn(name: str, statuses: list[str], kinds: list[str] | None, worker: str) -> float:
     """One claim and its stage; returns the seconds to wait before the next turn."""
-    if paused():
+    if paused() or claude.stopped():  # stopped: the provider refused a call for billing reasons, nothing is claimed
         return 10
     allowed = list(statuses)
     if not kinds and name in ("fast", "quick", "claude"):
@@ -732,7 +732,14 @@ def _pauses() -> dict[str, str]:
     """Reasons the system is legitimately waiting. These are announced once as a pause, never as
     'trabado'."""
     out = {}
-    pu = claude.paused_until()
+    st = claude.stopped()
+    if st:
+        out["billing"] = site.t(
+            f"stopped: the model provider refused a call for billing reasons ({st['why'][:120]}). Nothing runs until you "
+            f"resume it in the app or choose another model in Settings",
+            f"detenido: el proveedor del modelo rechazó una llamada por facturación ({st['why'][:120]}). Nada corre hasta "
+            f"que lo reanudes en la app o elijas otro modelo en Ajustes")
+    pu = 0 if st else claude.paused_until()
     if now() < pu:
         until = db.fmt_time(pu)[-5:]
         out["limit"] = site.t(f"Claude paused by its usage limit until {until}", f"Claude en pausa por límite de uso hasta las {until}")
@@ -795,6 +802,17 @@ def deliver_blocked() -> list[str]:
                        data={"caveats": blocked_caveats(d), "blocked_reason": None})
         notes.append(site.t(f"#{r['id']}: it had an open PR, delivering it", f"#{r['id']}: tenía PR abierto, lo entrego"))
     return notes
+
+
+def tell_stop(pauses: dict) -> bool:
+    """The one message a billing stop sends: once per stop, to the user's own DM. Paying, or choosing another model,
+    is theirs to decide, and nothing runs until they do."""
+    st = claude.stopped()
+    if not st or db.kv_get("pause_alerted:billing") == st["at"]:
+        return False
+    outbound.ping(f"⏹ {pauses.get('billing') or st['why']}")
+    db.kv_set("pause_alerted:billing", st["at"])
+    return True
 
 
 def watchdog() -> None:
@@ -946,6 +964,7 @@ def watchdog() -> None:
     # the user's rule: nothing internal ever asks for his intervention. Problems and
     # pauses live on the board as one calm line; the only ping is a Claude budget/org limit,
     # once a day, because buying credits is genuinely his call.
+    tell_stop(pauses)
     if "budget" in pauses and db.kv_get("pause_alerted:budget", 0) < now() - 86400:
         outbound.ping(f"⏸ {pauses['budget']}")
         db.kv_set("pause_alerted:budget", now())

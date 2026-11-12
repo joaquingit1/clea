@@ -783,6 +783,10 @@ def handle(method: str, path: str, query: dict, body: dict) -> dict | list:
             return {"ok": True}
         if sub == "provider":
             return {"ok": True, "provider": providers.select(str(body.get("id") or ""), body.get("api_key"))}
+        if sub == "provider/resume":
+            from . import claude
+            ok, why = claude.try_resume()
+            return {"ok": ok, "why": why, "stopped": claude.stopped()}
         if sub == "provider/login":
             return providers.login_start(str(body.get("id") or ""))
         if sub == "provider/login/cancel":

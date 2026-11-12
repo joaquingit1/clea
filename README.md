@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/joaquingit1/clea/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/joaquingit1/clea/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/joaquingit1/clea/releases/latest"><img alt="Release 0.2.1" src="https://img.shields.io/badge/release-v0.2.1-2135f4?style=flat-square"></a>
+  <a href="https://github.com/joaquingit1/clea/releases/latest"><img alt="Release 0.2.2" src="https://img.shields.io/badge/release-v0.2.2-2135f4?style=flat-square"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache_2.0-2135f4?style=flat-square"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square">
 </p>
@@ -41,7 +41,7 @@
 
 ## Quickstart
 
-**Download the app.** Get `Clea-0.2.1-arm64.dmg` from the [latest release](https://github.com/joaquingit1/clea/releases/latest),
+**Download the app.** Get `Clea-0.2.2-arm64.dmg` from the [latest release](https://github.com/joaquingit1/clea/releases/latest),
 drag Clea to Applications and open it. The engine and its own Python are inside: there is nothing else to install.
 The first run walks you through connecting your model, Slack, repositories and team, in the app's own window.
 

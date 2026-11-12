@@ -182,3 +182,54 @@ def test_no_files_no_note_and_a_broken_transcript_never_fails_a_session(case, tm
     claude.note_files(7, None, str(wt))               # the run gave no session id
     assert not (notes / "files.json").exists()
     assert claude.files_note(7, str(tmp_path)) == ""  # a session outside any repo gets no list
+
+
+# ---- a billing refusal stops the install ------------------------------------------------------------------------------
+@pytest.fixture
+def cli(monkeypatch):
+    """claude._invoke with the CLI, the ledger and the key-value store stood in: the CLI answers what the test says."""
+    kv, calls = {}, []
+    monkeypatch.setattr(claude.db, "kv_get", lambda k, default=None: kv.get(k, default))
+    monkeypatch.setattr(claude.db, "kv_set", lambda k, v: kv.__setitem__(k, v))
+    monkeypatch.setattr(claude.db, "record_call", lambda *a: 1)
+    monkeypatch.setattr(claude.providers, "claude_env", lambda: {})
+    monkeypatch.setattr(claude.providers, "selected_id", lambda: "claude-api")
+    monkeypatch.setattr(claude, "_remember_session", lambda *a: None)
+    monkeypatch.setattr(claude, "_signed_out", lambda t0: True)
+
+    class Proc:
+        returncode, stderr = 1, ""
+
+        def __init__(self, out):
+            self.stdout = json.dumps(out)
+
+    def answer(out):
+        def run(cmd, **k):
+            calls.append(cmd)
+            return Proc(out)
+        monkeypatch.setattr(claude, "run", run)
+    return kv, calls, answer
+
+
+@pytest.mark.parametrize("said,status", [
+    ("Credit balance is too low", None),                                           # Anthropic, a key out of credit
+    ("You exceeded your current quota, please check your plan and billing details", None),  # OpenAI
+    ("request failed", 402),
+])
+def test_a_billing_refusal_stops_the_install_and_no_further_call_leaves(cli, said, status):
+    kv, calls, answer = cli
+    answer({"is_error": True, "subtype": "success", "result": said, "api_error_status": status, "session_id": "s"})
+    with pytest.raises(claude.ClaudeLimited, match="stopped"):
+        claude._invoke(["p", "--model", "claude-opus-5-5"], "reply", 7, "/tmp", 60)
+    assert claude.stopped()["why"] == said and claude.stopped()["provider"] == "claude-api"
+    with pytest.raises(claude.ClaudeLimited, match="stopped"):
+        claude._invoke(["p", "--model", "claude-opus-5-5"], "reply", 8, "/tmp", 60)
+    assert len(calls) == 1  # the second one never reached the CLI
+
+
+def test_a_usage_limit_or_a_lost_login_is_not_a_stop(cli):
+    kv, calls, answer = cli
+    answer({"is_error": True, "subtype": "success", "result": "Not logged in. Please run /login", "api_error_status": 401})
+    with pytest.raises(claude.ClaudeLimited, match="provider"):
+        claude._invoke(["p", "--model", "claude-opus-5-5"], "reply", 7, "/tmp", 60)
+    assert claude.stopped() is None and kv.get("provider_problem")  # the ten-minute pause a probe lifts, as before

@@ -1008,3 +1008,50 @@ def mechanical_fix_steps_up(s: Sim, ok: Checks):
     ok(s.model.built[n:] == [("fix", True), ("fix", False)] and d["fix_stepped_up"] is True and s.case(c)["status"] == "gate",
        "a light session that fails is done again by Opus in the same round, and the case moves on", (s.model.built[n:], s.case(c)["status"]))
 
+
+@scenario("spend", "A billing refusal stops everything: nothing is claimed or retried until the user resumes it or chooses another model")
+def billing_stop(s: Sim, ok: Checks):
+    from ap import claude, core, providers, worker
+    s.world.post(ANA_DM, ANA, "hey Sam, can you check why the checkout total is wrong for coupon orders?")
+    s.ingest()
+    case = open_cases(s, "REPLY")[0]["id"]
+    db.update_item(case, next_run_at=0)
+    ok(claude.billing_refusal("API Error: Credit balance is too low") and claude.billing_refusal("You exceeded your current quota")
+       and claude.billing_refusal("", 402) and not claude.billing_refusal("usage limit reached, resets 11pm"),
+       "a billing refusal is told apart from a usage limit")
+    err = claude.provider_stopped("Credit balance is too low")
+    ok(isinstance(err, claude.ClaudeLimited) and claude.stopped()["why"] == "Credit balance is too low"
+       and claude.paused_until() > core.now() + 365 * 86400, "the refusal stops the install, with no end date", claude.stopped())
+    calls = len(s.model.calls)
+    for pool, stages in (("quick", worker.QUICK), ("fast", worker.FAST), ("claude", worker.SLOW)):
+        worker.pool_turn(pool, stages, None, f"sim-{pool}")
+    c = s.case(case)
+    ok(c["status"] == "reply_draft" and not c.get("claimed_by") and not c.get("attempts") and len(s.model.calls) == calls,
+       "no pool claims a case and no model is asked while stopped", (c["status"], c.get("claimed_by"), c.get("attempts")))
+    ok("billing" in worker._pauses() and "limit" not in worker._pauses(), "the board says why, as a stop and not as a usage limit", worker._pauses())
+    ok(claude.probe_limited() == [] and claude.stopped(), "nothing probes the provider by itself")
+    # worker.tell_stop, not worker.watchdog: the watchdog also sweeps this Mac's processes and containers
+    sent = [worker.tell_stop(worker._pauses()), worker.tell_stop(worker._pauses())]
+    told = [o for o in s.world.outbox if o.get("channel") == DM and "billing" in (o.get("text") or "")]
+    ok(sent == [True, False] and len(told) == 1, "the user is told once, in their own DM", (sent, [o.get("text", "")[:80] for o in s.world.outbox]))
+
+    probe = claude._probe
+    try:
+        claude._probe = lambda mid: False
+        ok(claude.try_resume() == (False, "Credit balance is too low") and claude.stopped(), "resume while it still refuses: the stop stands")
+        claude._probe = lambda mid: True
+        ok(claude.try_resume() == (True, "") and not claude.stopped() and claude.paused_until() <= core.now(), "resume once it answers: running again")
+    finally:
+        claude._probe = probe
+    worker.pool_turn("quick", worker.QUICK, None, "sim-quick")
+    ok(len(s.model.calls) > calls, "and the waiting case is worked", s.case(case)["status"])
+
+    claude.provider_stopped("insufficient_quota")
+    state = providers.state
+    try:
+        providers.state = lambda pid: {"ready": True, "detail": "", "id": pid}
+        providers.select("claude-subscription")
+    finally:
+        providers.state = state
+    ok(not claude.stopped(), "choosing another way to reach a model ends the stop by itself")
+

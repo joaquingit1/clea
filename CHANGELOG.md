@@ -3,7 +3,14 @@
 Notable changes to Clea. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions
 follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.2] - 2026-11-12
+
+### Added
+
+- **A stop on a billing refusal.** When the provider refuses a call because a key is out of credit or over its quota,
+  every lane stops and nothing is retried. The app shows why, with **Resume** (one tiny call first) and a way to
+  choose another model, which resumes by itself. A saved API key can now be swapped for another in Settings without
+  disconnecting first.
 
 ### Changed
 
@@ -57,5 +64,6 @@ The first public release.
 - **English and Spanish.** The app and everything Clea writes to you follow the install's language.
 - **A desktop app** that starts and stops the engine by itself.
 
+[0.2.2]: https://github.com/joaquingit1/clea/releases/tag/v0.2.2
 [0.2.1]: https://github.com/joaquingit1/clea/releases/tag/v0.2.1
 [0.2.0]: https://github.com/joaquingit1/clea/releases/tag/v0.2.0

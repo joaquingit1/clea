@@ -250,7 +250,64 @@ def need_connectors(role: str) -> None:
     raise ConnectorsMissing(f"{role}: logged into {who}, which has no work connectors")
 
 
+# What a provider says when it will not take a call until someone pays: Anthropic's key without credit, OpenAI's quota
+# and billing limits. Matched on the answer's text, lowercased.
+BILLING_WORDS = ("credit balance is too low", "insufficient_quota", "exceeded your current quota", "billing hard limit",
+                 "billing_not_active", "payment required")
+STOP_KEY = "provider_stopped"
+FOREVER = 10 * 365 * 86400
+
+
+def stopped() -> dict | None:
+    """The stop a billing refusal put the install in ({at, why, provider}), or None. Only the user ends it: by
+    resuming it by hand (try_resume) or by choosing another way to reach a model (providers.select)."""
+    return db.kv_get(STOP_KEY) or None
+
+
+def billing_refusal(text: str, status=None) -> bool:
+    return status == 402 or any(w in (text or "").lower() for w in BILLING_WORDS)
+
+
+def provider_stopped(why: str) -> "ClaudeLimited":
+    """The provider refused a call for billing reasons: every lane stops and stays stopped until the user acts. Left
+    as a failure, each case spent its three attempts and blocked, and the worker kept asking: an install whose API key
+    ran out of credit on 2026-11-10 made 3,347 more calls in two days, every one refused, and marked 139 cases blocked.
+    Nothing here retries by itself, not even a probe: credit that comes back is the user's to spend, on their word."""
+    if not stopped():
+        db.kv_set(STOP_KEY, {"at": int(time.time()), "why": why[:300], "provider": providers.selected_id()})
+        log("provider refused a call for billing reasons: stopped until the user resumes", why=why[:200])
+    return ClaudeLimited(f"stopped: {why[:300]}")
+
+
+def resume(why: str = "") -> int:
+    """End the stop: the cases that were waiting on it run now. Returns how many."""
+    was = stopped()
+    db.kv_set(STOP_KEY, None)
+    _pause(0)
+    _provider_ok()
+    n = db.q1("SELECT COUNT(*) AS n FROM items WHERE claimed_by IS NULL AND next_run_at>? AND last_error LIKE 'ClaudeLimited%'",
+              int(time.time()))["n"]
+    _requeue_limited()
+    if was:
+        log("stop ended", why=why or "resumed by the user", stopped_for_s=int(time.time()) - was["at"], waiting=n)
+    return n
+
+
+def try_resume() -> tuple[bool, str]:
+    """The user's "resume": one tiny call first. If the provider answers, the stop ends; if it still refuses, the stop
+    stands and nothing else was tried."""
+    was = stopped()
+    if not was:
+        return True, ""
+    if _probe(providers.model_id("sonnet")):
+        resume()
+        return True, ""
+    return False, was["why"]
+
+
 def paused_until() -> int:
+    if stopped():  # every guard that waits out a usage limit waits out a stop too, with no end until the user gives one
+        return int(time.time()) + FOREVER
     return int(db.kv_get("claude_paused_until", 0))
 
 
@@ -584,6 +641,9 @@ def _provider_ok() -> None:
 def _invoke(args: list[str], role: str, item_id: int | None, cwd: str, timeout: int, env: dict | None = None) -> dict:
     t0 = time.time()
     lane = _lane(role)
+    st = stopped()
+    if st:  # no call leaves while the install is stopped: asking again is what the stop is there to end
+        raise ClaudeLimited(f"stopped: {st['why']}")
     try:
         penv = providers.claude_env()
     except providers.NotReady as e:
@@ -635,6 +695,9 @@ def _invoke(args: list[str], role: str, item_id: int | None, cwd: str, timeout: 
     why = " usage limit" if usage_limit else f" {res.strip().splitlines()[0][:60]}" if res.strip() else ""
     out["call_row"] = db.record_call("claude", lane, item_id, ok, dur, usd, in_tok, u.get("output_tokens", 0),
                                      f"{model_used}" + (f" {out.get('subtype', '')}{why}" if not ok else ""))
+    if not ok and billing_refusal(low, out.get("api_error_status")):
+        _remember_session(item_id, role, out.get("session_id"), cwd, t0)
+        raise provider_stopped(res.strip().splitlines()[0] if res.strip() else "the provider refused the call for billing reasons")
     if not ok and (out.get("api_error_status") == 401 or any(w in low for w in AUTH_WORDS)) and _signed_out(t0):
         _remember_session(item_id, role, out.get("session_id"), cwd, t0)
         raise provider_down(res.strip().splitlines()[0] if res.strip() else "the engine is not signed in")
@@ -676,6 +739,9 @@ def _codex(role: str, prompt: str, model: str, cwd: str, system: str, schema: di
     answer in the shape the stages already read, recorded in the same ledger, with the same pause on a plan limit or
     a lost sign-in."""
     from . import codex
+    st = stopped()
+    if st:
+        raise ClaudeLimited(f"stopped: {st['why']}")
     try:
         auth, token = providers.codex_auth()
     except providers.NotReady as e:
@@ -705,6 +771,8 @@ def _codex(role: str, prompt: str, model: str, cwd: str, system: str, schema: di
     if not ok:
         if out.get("session_id") and item_id is not None and resumable:
             db.kv_set(_resume_key(item_id, role), {"sid": out["session_id"], "cwd": cwd, "at": int(time.time())})
+        if billing_refusal(res):
+            raise provider_stopped(res.strip().splitlines()[0])
         lim = out.get("limit")
         if lim:  # the plan's usage limit (or a rate limit): every call waits, the probe lifts it
             _pause(int(lim.get("reset_at") or time.time() + CFG["claude"]["limit_backoff_s"]))
@@ -876,6 +944,8 @@ def probe_limited() -> list[str]:
     clears the mark (the mark is a guess, the probe is the truth: 2026-09-28 the pause outlived a re-login
     by an hour and every draft sat idle)."""
     cleared = []
+    if stopped():
+        return cleared  # a stop is not probed: it ends when the user says so
     if paused_until() > time.time() and time.time() - db.kv_get("probe_at:pause", 0) >= 300:
         db.kv_set("probe_at:pause", int(time.time()))
         if _probe(providers.model_id("sonnet")):

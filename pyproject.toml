@@ -1,6 +1,6 @@
 [project]
 name = "clea"
-version = "0.2.1"
+version = "0.2.2"
 description = "An engineering agent that works alongside one developer: it reads the Slack, GitHub and Jira you point it at, drafts your replies, investigates bugs and opens draft pull requests, and nothing leaves in your name without your approval."
 readme = "README.md"
 requires-python = ">=3.12"

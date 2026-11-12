@@ -221,6 +221,11 @@ def select(pid: str, api_key: str | None = None) -> dict:
     save_config({"provider": {"engine": eng, "auth": p["auth"]}})
     refresh()
     log("provider selected", id=pid)
+    from . import claude
+    if claude.stopped():
+        # the user answered the stop by choosing how Clea reaches a model (another key, a plan, another vendor), and
+        # that choice was just checked: a key by a real call, a login by its CLI
+        claude.resume(f"provider chosen: {pid}")
     return state(pid)
 
 

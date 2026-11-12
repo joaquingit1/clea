@@ -140,6 +140,19 @@ number of days in `<CLEA_HOME>/config.json`; `0` starts from the moment setup fi
 { "claude": { "repo_skills": true } }
 ```
 
+## When the provider refuses a call for billing reasons
+
+If your API key runs out of credit or reaches its quota, Clea stops: no case is claimed, nothing is retried and no
+probe is sent. It tells you once in your own DM, and the app shows a banner with the provider's own words. You end
+the stop yourself, in one of two ways:
+
+- **Resume.** Clea makes one tiny call. If the provider answers, the waiting cases run; if it still refuses, the stop
+  stands.
+- **Choose another model** in Settings: paste a different key, sign in to Claude Code or Codex on this Mac, or switch
+  vendor. The choice is checked, and Clea resumes by itself.
+
+Credit that comes back does not restart Clea by itself: that is yours to say.
+
 ## Checks before a pull request
 
 Clea detects how each repository checks itself (Node, Python, Go, Rust, Makefile). To name the commands yourself, list

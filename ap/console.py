@@ -749,7 +749,7 @@ def _health() -> dict:
     except Exception:
         wrong = None
     pu = db.kv_get("claude_paused_until", 0) or 0
-    return {"rev": h.get("rev"), "paused_until": pu if pu > now() else None, "wrong_account": wrong,
+    return {"rev": h.get("rev"), "paused_until": pu if pu > now() else None, "wrong_account": wrong, "stopped": claude.stopped(),
             "worker_beat": db.kv_get("worker_beat") or db.kv_get("hot_loaded_at")}
 
 

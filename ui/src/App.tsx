@@ -1,3 +1,4 @@
+import { Stopped } from "./components/Stopped";
 import { useEffect, useState } from "react";
 import { usePoll, type Board as B, type ChatSummary, type Thread } from "./api";
 import { ActivityFeed } from "./components/ActivityFeed";
@@ -30,7 +31,7 @@ export default function App() {
 
 function Console({ setup }: { setup: SetupState | null }) {
   const route = useRoute();
-  const { data: board } = usePoll<B>("/api/board", 10000);
+  const { data: board, refresh: refreshBoard } = usePoll<B>("/api/board", 10000);
   const { data: threads } = usePoll<Thread[]>("/api/threads", 10000);
   const { data: chats } = usePoll<ChatSummary[]>("/api/chats", 5000);
   const [palette, setPalette] = useState(false);
@@ -85,6 +86,7 @@ function Console({ setup }: { setup: SetupState | null }) {
         {/* the sky, always, except on a case or a PR */}
         <Sky hidden={page === "thread" || page === "pr"} />
         {desktop && !["thread", "threads", "pr"].includes(page) ? <div data-drag className="relative h-[46px] shrink-0" /> : null}
+        {board?.health.stopped ? <Stopped stop={board.health.stopped} onResumed={refreshBoard} /> : null}
         <div key={pageKey(route)} className="page-in relative min-h-0 flex-1">
         {page === "board" ? <Board board={board} threads={ts} /> : null}
         {route.page === "threads" ? <Threads threads={ts} chats={cs} /> : null}

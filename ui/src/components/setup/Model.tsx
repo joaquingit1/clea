@@ -188,9 +188,14 @@ function ProviderCard({ p, login, busyElsewhere, onLogin, onCancel }: { p: Provi
       setBusy(null);
     }
   };
+  // a saved key can be swapped for another without disconnecting first (a key that ran out of credit, a rotated one)
+  const [replacing, setReplacing] = useState(false);
   const saveKey = async () => {
     if (!key.trim()) return setError(t("model.key.empty"));
-    if (await run("key", () => api.provider(p.id, key.trim()))) setKey(""); // a refused key stays in the box to be fixed
+    if (await run("key", () => api.provider(p.id, key.trim()))) {
+      setKey(""); // a refused key stays in the box to be fixed
+      setReplacing(false);
+    }
   };
 
   const waiting = login?.state === "waiting" || login?.state === "starting";
@@ -236,7 +241,7 @@ function ProviderCard({ p, login, busyElsewhere, onLogin, onCancel }: { p: Provi
         </p>
       ) : null}
 
-      {p.needs === "key" ? (
+      {p.needs === "key" || replacing ? (
         <div className="mt-3">
           <div className="flex flex-wrap gap-2">
             <div className="min-w-[12rem] flex-1">
@@ -322,6 +327,11 @@ function ProviderCard({ p, login, busyElsewhere, onLogin, onCancel }: { p: Provi
               {t("model.useThis")}
             </button>
           ) : null}
+          {canDisconnect && p.auth === "api_key" && p.ready && !replacing ? (
+            <button type="button" onClick={() => setReplacing(true)} disabled={busy !== null} className={BTN.small}>
+              {t("model.key.replace")}
+            </button>
+          ) : null}
           {canDisconnect ? (
             <button type="button" onClick={() => run("out", () => api.logout(p.id))} disabled={busy !== null} className={BTN.small}>
               {busy === "out" ? <Spinner size={13} /> : null}
@@ -330,7 +340,7 @@ function ProviderCard({ p, login, busyElsewhere, onLogin, onCancel }: { p: Provi
           ) : null}
         </div>
       ) : null}
-      {error && p.needs !== "key" ? <ErrorText>{error}</ErrorText> : null}
+      {error && p.needs !== "key" && !replacing ? <ErrorText>{error}</ErrorText> : null}
     </div>
   );
 }
