@@ -49,6 +49,12 @@ scenario can replace any answer (`s.model.on("reply", ...)`) to put the engine i
 build scenario seeds a small repository with a real bug, has a teammate report it, and passes only if a draft pull
 request appears whose branch fixes the bug, adds a test and passes the repository's tests.
 
+Live mode defaults to the signed-in Claude Code CLI. To run the same cases on Kimi K2.7 Code, supply your OpenCode Go
+key as `CLEA_SECRET_OPENCODE_GO_API_KEY` and run `CLEA_SIM_PROVIDER=kimi-go python -m sim --live`.
+For Kimi K3.1 Pro through the Kimi API Platform, supply `CLEA_SECRET_MOONSHOT_API_KEY` and use `CLEA_SIM_PROVIDER=kimi-api`.
+The report shows the model call count and estimated cost at API rates. Subscription usage can differ from what the
+estimate would cost on a metered account.
+
 ## Reporting a bug as a scenario
 
 The most useful bug report is a scenario that fails. Add it to `sim/scenarios.py`, run `python -m sim -k its_name -v`,

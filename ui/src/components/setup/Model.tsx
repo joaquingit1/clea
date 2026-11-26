@@ -14,13 +14,19 @@ const USAGE: Record<ProviderId, Key> = {
   "openai-chatgpt": "model.usage.chatgptPlan",
   "codex-login": "model.usage.chatgptPlan",
   "openai-api": "model.usage.api",
+  "kimi-go": "model.usage.kimiGo",
+  "kimi-api": "model.usage.api",
 };
 // where each vendor hands out keys
 const KEY_URL: Partial<Record<ProviderId, string>> = {
   "claude-api": "https://console.anthropic.com/settings/keys",
   "openai-api": "https://platform.openai.com/api-keys",
+  "kimi-go": "https://opencode.ai/console",
+  "kimi-api": "https://platform.kimi.ai/console/api-keys",
 };
-const KEY_SHAPE: Partial<Record<ProviderId, string>> = { "claude-api": "sk-ant-…", "openai-api": "sk-…" };
+const KEY_SHAPE: Partial<Record<ProviderId, string>> = {
+  "claude-api": "sk-ant-…", "openai-api": "sk-…", "kimi-go": "oc_sk_…", "kimi-api": "sk-…",
+};
 const CHATGPT_USAGE = "https://chatgpt.com/settings/usage";
 const WELCOMED = "chatgpt-plan-welcomed";
 
@@ -200,7 +206,8 @@ function ProviderCard({ p, login, busyElsewhere, onLogin, onCancel }: { p: Provi
 
   const waiting = login?.state === "waiting" || login?.state === "starting";
   // a stored key or the ChatGPT sign-in can be forgotten from settings; a CLI's own login is never Clea's to touch
-  const canDisconnect = f.mode === "settings" && (p.auth === "api_key" || p.auth === "siwc") && (p.ready || !!p.account);
+  const usesKey = p.auth === "api_key" || p.auth === "kimi_go" || p.auth === "kimi_api";
+  const canDisconnect = f.mode === "settings" && (usesKey || p.auth === "siwc") && (p.ready || !!p.account);
   return (
     <div className="choice rounded-2xl px-4 py-3.5" data-on={on || undefined}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -327,7 +334,7 @@ function ProviderCard({ p, login, busyElsewhere, onLogin, onCancel }: { p: Provi
               {t("model.useThis")}
             </button>
           ) : null}
-          {canDisconnect && p.auth === "api_key" && p.ready && !replacing ? (
+          {canDisconnect && usesKey && p.ready && !replacing ? (
             <button type="button" onClick={() => setReplacing(true)} disabled={busy !== null} className={BTN.small}>
               {t("model.key.replace")}
             </button>

@@ -679,6 +679,52 @@ def live_thread_already_answered(s: Sim, ok: Checks):
 
 
 # ---- I. work that ends in a pull request ---------------------------------------------------------------------------------------
+@scenario("build", "Clea preserves the source ticket when it opens and rewrites a draft pull request",
+          config={"quality": {"pr_body_max_chars": 250}})
+def draft_pr_keeps_source_ticket(s: Sim, ok: Checks):
+    import json
+    from pathlib import Path
+    from ap import core, outbound, tasks
+
+    title = "Round coupon discounts half up"
+    body = "## Problem\n" + ("A fractional cent was cut off. " * 20)
+    wt = Path(core.CFG["repos"]["web"]["path"])
+    part = {"repo": "web", "branch": "fix-coupons", "wt": str(wt)}
+    iid = db.create_item("TASK", "publish", title, "sim:ticketed-pr",
+                         data={"text": "Please fix the coupon rounding in ENG-12.", "parts": [part],
+                               "plan": {"title": "Compare the earlier ENG-99 fix"}})
+    (wt / "AP_LEDGER.json").write_text(json.dumps({"pr_title": title, "pr_body": body}))
+    s.model.on("pr_scrub", lambda *_: {"body": body, "removed": []})
+    s.model.on("publish_text", lambda *_: {"title": title, "body": body})
+
+    def check(text, step):
+        ok(text.count("ENG-12") == 1 and "ENG-99" not in text, step + " keeps only the source ticket")
+        ok(len(text) <= 250, step + " respects the PR body limit", len(text))
+
+    title, draft = tasks._pr_body(s.case(iid), part)
+    pr = outbound.open_draft_pr("web", part["branch"], title, draft, iid)
+    part.update(pr=pr["number"], pr_url=pr["url"])
+    db.update_item(iid, data={"parts": [part]})
+    sent = s.world.prs[("web", part["pr"])]
+    check(sent["body"], "opening the draft")
+    tasks.pr_body_refresh(s.case(iid))
+    check(sent["body"], "rewriting the PR")
+    tasks.rescrub_open_prs()
+    check(sent["body"], "scrubbing the PR again")
+
+    copy = s.case(iid)
+    copy["data"] = {**copy["data"], "text": "Compare ENG-12 and ENG-18 before deciding."}
+    _, ambiguous = tasks._pr_body(copy, part)
+    ok("ENG-" not in ambiguous, "ambiguous source mentions and model-generated references are not auto-added")
+    copy["data"]["jira"] = "ENG-18"
+    _, bound = tasks._pr_body(copy, part)
+    ok(bound.count("ENG-18") == 1 and "ENG-12" not in bound, "an explicitly bound ticket takes precedence")
+
+    s.model.on("publish_text", lambda *_: {"title": "ENG-12: " + title, "body": body})
+    tasks.pr_body_refresh(s.case(iid))
+    ok(sent["title"].startswith("ENG-12: ") and "ENG-12" not in sent["body"], "a ticket already in the title is not duplicated")
+
+
 @scenario("build", "A bug a teammate reports with its cause ends as a draft pull request that fixes it, with a test; nothing is "
           "said in Slack without approval", live="only")
 def bug_to_draft_pr(s: Sim, ok: Checks):

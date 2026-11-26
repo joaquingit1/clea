@@ -118,6 +118,7 @@ def main() -> int:
     picked = [sc for sc in _sc.SCENARIOS if (args.k in sc["name"] or args.k == sc["group"])
               and (sc["live"] if args.live else sc["live"] != "only")]
     report, failed = [f"# Clea simulation ({'live' if args.live else 'scripted'}), {time.strftime('%Y-%m-%d %H:%M')}", ""], 0
+    total_usd, model_calls = 0.0, 0
     for sc in picked:
         sim.reset(sc["config"])
         if app:
@@ -129,6 +130,8 @@ def main() -> int:
         except Exception:
             err = traceback.format_exc()
             ok.failed.append("the scenario crashed: " + err.strip().splitlines()[-1])
+        if args.live:
+            sim.settle_live_calls()
         try:
             ok.failed += [] if args.live else invariants(sim)  # a live model writes what it likes; the scripted run is exact
         except Exception as e:
@@ -143,11 +146,20 @@ def main() -> int:
                 print("        " + err.replace("\n", "\n        ")[-1800:])
         report += [f"## {'✅' if good else '❌'} {sc['name']} ({sc['group']})", "", sc["intent"], ""]
         report += [f"- FAILED: {f}" for f in ok.failed] + ([""] if ok.failed else [])
+        if args.live:
+            usage = db.q1("SELECT COUNT(*) n, COALESCE(SUM(usd), 0) usd FROM calls")
+            total_usd += usage["usd"]
+            model_calls += usage["n"]
+            report += [f"Model usage: {usage['n']} calls, ${usage['usd']:.6f} at API rates.", ""]
         try:
             report += [describe(sim), ""]
         except Exception as e:
             report += [f"(could not describe the run: {e})", ""]
     print(f"\n{len(picked) - failed} of {len(picked)} scenarios pass. Report: {args.report}")
+    if args.live:
+        summary = f"Model usage: {model_calls} calls, ${total_usd:.6f} at API rates."
+        print(summary)
+        report[2:2] = [summary, ""]
     Path(args.report).write_text("\n".join(report))
     if app and picked:
         keep_open(sim, args.serve)

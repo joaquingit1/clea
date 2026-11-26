@@ -14,7 +14,7 @@ import re
 import time
 from pathlib import Path
 
-from . import approvals, claude, context, cover, db, finders, gates, gh, merge_order, muse, outbound, site, slack, worktree
+from . import approvals, cases, claude, context, cover, db, finders, gates, gh, merge_order, muse, outbound, site, slack, worktree
 from .core import CFG, V1, item_dir, log, now, run, slug
 
 PRECEDENTS_FOUND = {"type": "array", "items": {"type": "object", "required": ["request", "resolution"], "properties": {
@@ -1598,7 +1598,7 @@ def _pr_body(it: dict, part: dict) -> tuple[str, str]:
     from . import repro
     body += repro.pr_section(it)
     body += site.t("\n\n## Local checks\n", "\n\n## Checks locales\n") + part.get("gates", "")
-    return title, _cap_body(it, part, _scrub_pr_body(it, title, body))
+    return title, _cap_body(it, part, title, _scrub_pr_body(it, title, body))
 
 
 def _bot_why(p: dict) -> str:
@@ -1609,7 +1609,19 @@ def _bot_why(p: dict) -> str:
                   lambda m: site.t("written by the bot, verify: ", "generado por el bot, verificar: "), p["why"])
 
 
-def _cap_body(it: dict, part: dict, body: str) -> str:
+def _source_pr_ticket(it: dict) -> str | None:
+    """A bound ticket takes precedence. Otherwise require one key in the original report."""
+    if it["kind"] not in ("TASK", "INCIDENT", "IDEA"):
+        return None
+    data = it["data"]
+    bound = str(data.get("jira") or "").strip().upper()
+    if site.ticket_re().fullmatch(bound):
+        return bound
+    keys = cases.tickets_in(data.get("text") or "")
+    return keys[0] if len(keys) == 1 else None
+
+
+def _cap_body(it: dict, part: dict, title: str, body: str) -> str:
     """The size justification (when over budget) goes in; then the deterministic cap (ap/prbody.py): Problem, Root
     cause, Changes, Edge cases and Testing stay, the rest moves to the case report, never the PR."""
     from . import prbody
@@ -1617,7 +1629,19 @@ def _cap_body(it: dict, part: dict, body: str) -> str:
     if sz.get("over") and sz.get("justification") and not re.search(r"## Tamaño|## Size", body):  # its own heading, either language
         body = body.rstrip() + site.t(f"\n\n## Size\n{sz['net']} net lines (budget {sz['limit']}): {sz['justification']}",
                                       f"\n\n## Tamaño\n{sz['net']} líneas netas (presupuesto {sz['limit']}): {sz['justification']}")
-    body, overflow = prbody.trim(body, int(CFG["quality"].get("pr_body_max_chars", prbody.LIMIT)))
+    limit = int(CFG["quality"].get("pr_body_max_chars", prbody.LIMIT))
+    full_body = body
+    body, overflow = prbody.trim(full_body, limit)
+    ticket = _source_pr_ticket(it)
+    if ticket and not re.search(rf"\b{re.escape(ticket)}\b", f"{title}\n{body}", re.I):
+        note = site.t(f"Ticket: {ticket}", f"Ticket asociado: {ticket}")
+        if len(note) > limit:
+            note = ticket
+        if len(body) + len(note) + 2 > limit:
+            available = limit - len(note) - 2
+            body, overflow = prbody.trim(full_body, available) if available > 2 else ("", full_body.strip())
+        # The ticket must survive both the model's rewrite and the body trimmer.
+        body = f"{body}\n\n{note}" if body else note
     if overflow:
         i = it["data"].get("cur", 0)
         (item_dir(it["id"]) / f"pr-body-overflow-{i}.md").write_text(overflow)
@@ -1668,9 +1692,10 @@ def rescrub_open_prs() -> int:
                 pr = gh.pr_view(p["repo"], p["pr"])
                 if pr.get("state") != "OPEN":
                     continue
-                cleaned = _cap_body(it, p, _scrub_pr_body(it, pr.get("title", ""), pr.get("body") or ""))
+                title = pr.get("title", "")
+                cleaned = _cap_body(it, p, title, _scrub_pr_body(it, title, pr.get("body") or ""))
                 if cleaned.strip() != (pr.get("body") or "").strip():
-                    outbound.edit_pr(p["repo"], p["pr"], pr.get("title", ""), cleaned, it["id"])
+                    outbound.edit_pr(p["repo"], p["pr"], title, cleaned, it["id"])
                     n += 1
             except Exception as e:
                 log("rescrub failed", item=it["id"], err=str(e)[:120])
@@ -2186,12 +2211,13 @@ def pr_body_refresh(it: dict) -> None:
                       f"Current title: {current.get('title')}\nCurrent body:\n{(current.get('body') or '')[:6000]}\n\nCommits vs base:\n{commits}\n\n"
                       f"Diff stat:\n{stat}\n\nGate results (real test counts):\n{gates_txt}",
                       cwd=wt, schema=schema, tools=("Read", "Grep", "Glob"), add_dirs=(str(d),), item_id=it["id"])
-    out["body"] = _cap_body(it, part, out["body"])
-    outbound.edit_pr(part["repo"], part["pr"], out["title"][:200], out["body"], it["id"])
+    title = out["title"][:200]
+    out["body"] = _cap_body(it, part, title, out["body"])
+    outbound.edit_pr(part["repo"], part["pr"], title, out["body"], it["id"])
     led_f = Path(wt, "AP_LEDGER.json")
     try:  # keep the ledger in step so the next publish does not restore the stale text
         led = json.loads(led_f.read_text()) if led_f.exists() else {}
-        led.update(pr_title=out["title"][:200], pr_body=out["body"])
+        led.update(pr_title=title, pr_body=out["body"])
         led_f.write_text(json.dumps(led, ensure_ascii=False, indent=1))
     except Exception as e:
         log("ledger update failed", err=str(e)[:120])

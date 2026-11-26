@@ -153,6 +153,8 @@ Clea thinks with the account you already have. Pick one in the first run:
 - **Anthropic API key**
 - **Codex on this Mac** or **Sign in with ChatGPT**, on your ChatGPT plan
 - **OpenAI API key**
+- **Kimi K2.7 Code**, with an OpenCode Go API key and Claude Code installed
+- **Kimi K3.1 Pro**, with a [Moonshot API key](https://platform.kimi.ai/console/api-keys) and Claude Code installed
 
 ## How it works
 
@@ -171,9 +173,9 @@ State is one SQLite file on your disk. More in [docs/how-it-works.md](docs/how-i
 
 ## Tested against a simulated workspace
 
-`make sim` runs the real engine against a simulated Slack and GitHub: 51 scenarios of what people write (bursts,
+`make sim` runs 57 scripted scenarios against a simulated Slack and GitHub, covering what people write (bursts,
 edits, threads answered by someone else, the same report in two channels, a draft approved, edited or declined) and
-what must be true afterwards. `python -m sim --live` runs the same engine on your real model, including a seeded bug
+what must be true afterwards. `python -m sim --live` runs eight scenarios with a real model, including a seeded bug
 that has to end as a draft pull request that fixes it. See [docs/simulator.md](docs/simulator.md).
 
 ## Status

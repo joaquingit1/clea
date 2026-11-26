@@ -7,7 +7,8 @@ import { site } from "./lib";
 export type StepId = "welcome" | "model" | "slack" | "code" | "team" | "tickets" | "autonomy";
 export type Autonomy = "watch" | "ask" | "auto";
 export type ChannelRole = "team" | "prs" | "alerts" | "watch";
-export type ProviderId = "claude-subscription" | "claude-api" | "openai-chatgpt" | "codex-login" | "openai-api";
+export type ProviderId = "claude-subscription" | "claude-api" | "openai-chatgpt" | "codex-login" | "openai-api" | "kimi-go" | "kimi-api";
+type ProviderAuth = "subscription" | "api_key" | "siwc" | "kimi_go" | "kimi_api";
 
 export interface SetupStep {
   id: StepId;
@@ -18,9 +19,9 @@ export interface SetupStep {
 
 export interface ProviderState {
   id: ProviderId;
-  vendor: "Anthropic" | "OpenAI";
+  vendor: "Anthropic" | "OpenAI" | "Kimi";
   engine: "claude" | "codex";
-  auth: "subscription" | "api_key" | "siwc";
+  auth: ProviderAuth;
   cli: { name: "claude" | "codex"; installed: boolean; version: string; install_url: string };
   ready: boolean;
   selected: boolean;
@@ -94,7 +95,7 @@ export interface SetupState {
   language: Lang;
   user: { name: string };
   steps: SetupStep[];
-  provider: { engine: "" | "claude" | "codex"; auth: "" | "subscription" | "api_key" | "siwc" };
+  provider: { engine: "" | "claude" | "codex"; auth: "" | ProviderAuth };
   providers: ProviderState[];
   slack: SlackState;
   github: GithubState;

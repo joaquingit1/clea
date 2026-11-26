@@ -471,7 +471,9 @@ def news_for(item_id) -> str:
 
 
 def _resume_key(item_id, role) -> str:
-    return f"resume:{item_id}:{role}"
+    pid = providers.selected_id()
+    suffix = f":{pid}" if pid in providers.KIMI else ""
+    return f"resume:{item_id}:{role}{suffix}"
 
 
 def resume_for(item_id, role) -> str | None:
@@ -483,7 +485,7 @@ def resume_for(item_id, role) -> str | None:
 def _project_dir(cwd: str) -> Path:
     """Where the CLI keeps the transcripts of sessions started in `cwd`: the path with every character that is not a
     letter or a digit turned into a dash (a space and a dot too: 'Application Support/Clea/install-0.2' has both)."""
-    return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(Path(cwd).resolve()))
+    return providers.claude_config_dir() / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(Path(cwd).resolve()))
 
 
 FILES_SHOWN = 25
@@ -648,6 +650,10 @@ def _invoke(args: list[str], role: str, item_id: int | None, cwd: str, timeout: 
         penv = providers.claude_env()
     except providers.NotReady as e:
         raise provider_down(str(e)) from None
+    pid = next((p for p, (url, _, _) in providers.KIMI.items() if url == penv.get("ANTHROPIC_BASE_URL")), "")
+    if pid and "--setting-sources" in args:
+        args = list(args)
+        args[args.index("--setting-sources") + 1] = ""  # project settings must not override the key's destination
     try:
         from . import trace
         p = run(["claude", "-p", *args, "--output-format", "json"], cwd=cwd, timeout=timeout,
@@ -670,6 +676,10 @@ def _invoke(args: list[str], role: str, item_id: int | None, cwd: str, timeout: 
         why = f"killed: {reaped['why']}" if reaped.get("at", 0) >= int(t0) else "killed"
         db.record_call("claude", lane, item_id, False, dur, 0, 0, 0, why)
         raise ClaudeError(f"{role}: session {why} after {round(dur)}s (kept for resume)")
+    if pid:
+        key = penv["ANTHROPIC_AUTH_TOKEN"]
+        p.stdout = p.stdout.replace(key, "[redacted]")
+        p.stderr = p.stderr.replace(key, "[redacted]")
     try:
         out = json.loads(p.stdout)
     except Exception:
@@ -682,7 +692,8 @@ def _invoke(args: list[str], role: str, item_id: int | None, cwd: str, timeout: 
         raise ClaudeError(f"{role}: unparseable output rc={p.returncode}: {blob}")
     u = out.get("usage") or {}
     in_tok = u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0) + u.get("cache_read_input_tokens", 0)
-    usd = float(out.get("total_cost_usd") or 0)
+    usd = providers.kimi_cost(pid, u) if pid else float(out.get("total_cost_usd") or 0)
+    out["total_cost_usd"] = usd
     ok = not out.get("is_error")
     model_used = args[args.index("--model") + 1] if "--model" in args else "?"
     res = str(out.get("result", ""))
@@ -711,7 +722,7 @@ def _invoke(args: list[str], role: str, item_id: int | None, cwd: str, timeout: 
             db.kv_set(f"model_limited:{m}", int(time.time()) + 6 * 3600)
             db.kv_set("claude_org_limit_at", int(time.time()))
             raise ModelLimited(m)
-        if "limit" in low and ("usage" in low or "session" in low or "reset" in low):
+        if (pid and out.get("api_error_status") == 429) or ("limit" in low and ("usage" in low or "session" in low or "reset" in low)):
             # the claude.ai usage limit: global, until the reset time it names (2026-09-27: it was taken for a
             # per-model spend cap, every model got marked for 6 h and a build sat idle after the reset)
             _pause(_reset_epoch(res) or int(time.time()) + CFG["claude"]["limit_backoff_s"])
@@ -976,7 +987,8 @@ def _probe(mid: str) -> bool:
             auth, token = providers.codex_auth()
             return not codex.invoke("Reply with exactly: ok", model=mid, cwd=str(VAR), auth=auth, token=token, timeout=120).get("is_error")
         p = run(["claude", "-p", "reply with: ok", "--model", mid, "--output-format", "json", "--tools", "", "--strict-mcp-config",
-                 "--mcp-config", EMPTY_MCP, "--max-budget-usd", "0.05"], cwd=str(VAR), timeout=120, extra_env=providers.claude_env())
+                 "--mcp-config", EMPTY_MCP, "--setting-sources", "", "--max-budget-usd", "0.05"],
+                cwd=str(VAR), timeout=120, extra_env=providers.claude_env())
         return not json.loads(p.stdout).get("is_error")
     except Exception:  # signed out, no key, a timeout, garbage: not answering
         return False
@@ -1128,7 +1140,7 @@ def telemetry(prompt: str, *, cwd: str, schema: dict, item_id: int | None = None
     """Exception to 'Muse analyzes': Datadog/Sentry deep-dives run on Opus directly with the org's
     MCP connectors, because exact numbers and judgment matter. Read-only tools
     only; the transcript must show real MCP calls or the result is rejected."""
-    if not site.feature("telemetry") or providers.engine() != "claude":
+    if not site.feature("telemetry") or providers.engine() != "claude" or providers.selected_id() in providers.KIMI:
         raise ConnectorsMissing("telemetry: this install has no production data connectors")
     if not can_spend("telemetry", urgent):
         raise BudgetExhausted("telemetry")

@@ -29,7 +29,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-HOME = Path(os.environ.get("CLEA_SIM_HOME") or tempfile.mkdtemp(prefix="clea-sim-"))
+# Git reports canonical worktree paths. On macOS, /tmp and /var may name those paths through a symlink.
+HOME = Path(os.environ.get("CLEA_SIM_HOME") or tempfile.mkdtemp(prefix="clea-sim-")).resolve()
 ME, DM = "U0SIMSELF01", "D0SIMSELF01"
 TEAM_CH, PR_CH, ALERTS_CH, OPS_CH, RANDOM_CH = "C0SIMTEAM01", "C0SIMPRS001", "C0SIMALERT1", "C0SIMOPS001", "C0SIMRAND01"
 GROUP = "S0SIMGROUP1"
@@ -40,11 +41,17 @@ ANA_DM, CARLA_DM = "D0SIMANA001", "D0SIMCARLA1"
 def base_config() -> dict:
     """The install the onboarding would have written for Sam Rivera at acme: a team channel, a PR channel, an alerts
     channel and one watched ops channel; a user group; two repos; 'ask' autonomy."""
+    provider = {"engine": os.environ.get("CLEA_SIM_ENGINE") or "claude", "auth": "subscription"}
+    pid = os.environ.get("CLEA_SIM_PROVIDER")
+    if pid in ("kimi-go", "kimi-api"):
+        provider = {"engine": "claude", "auth": pid.replace("-", "_")}
+    elif pid:
+        raise ValueError(f"unknown CLEA_SIM_PROVIDER: {pid}")
     return {
         "edition": "release", "setup": {"complete": True, "done": ["welcome", "model", "slack", "code", "team", "autonomy"]},
         "language": "en", "user": {"name": "Sam Rivera"},
         # which engine a live run thinks with: CLEA_SIM_ENGINE=codex runs it on the Codex CLI's own sign-in
-        "provider": {"engine": os.environ.get("CLEA_SIM_ENGINE") or "claude", "auth": "subscription"},
+        "provider": provider,
         "mode": "act", "autonomy": "ask",
         "self_user_id": ME, "self_dm_channel": DM, "self_github": "sam-rivera", "github_org": "acme",
         "team_channel": TEAM_CH, "pr_channel": PR_CH, "alerts_channel": ALERTS_CH, "watched_channels": [OPS_CH],
@@ -321,6 +328,18 @@ class Sim:
             time.sleep(0.05)  # the thread-news judge runs beside the intake; a pass is over when it is
         if db.q1("SELECT 1 FROM events WHERE triaged=0 LIMIT 1"):
             triage.run_batch()
+
+    def settle_live_calls(self) -> None:
+        """Finish the thread-news judge before reporting costs or reusing the scenario database."""
+        from ap import impact
+        deadline = time.monotonic() + 370  # two 180s attempts, plus debounce
+        while True:
+            with impact._lock:
+                if not impact._pending:
+                    return
+            if time.monotonic() >= deadline:
+                raise TimeoutError("the live thread-news judge is still running; cannot reuse the scenario database")
+            time.sleep(0.1)
 
     def step(self, horizon_s: float = 900) -> dict | None:
         """Run the next due stage of any case, moving the clock forward to it when it is scheduled within `horizon_s`
