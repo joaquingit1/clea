@@ -860,7 +860,6 @@ def _store(conv: str, role: str, text: str, item: int | None, meta: dict | None 
 QUICK = {"type": "object", "required": ["confident", "answer"], "properties": {
     "confident": {"type": "boolean", "description": "true only when the STATE fully answers him"},
     "answer": {"type": "string", "description": "the answer in Markdown when confident, else empty"}}}
-TRANSCRIPTS = Path.home() / ".claude" / "projects" / re.sub(r"[/.]", "-", str(DATA))
 
 
 def _quick_state() -> str:
@@ -888,9 +887,11 @@ class _QuickSession:
     def __init__(self):
         from . import claude, providers
         from .core import env
+        self.provider = providers.selected_id()
+        self.model = providers.model_id("haiku")
         self.p = subprocess.Popen(
             ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-             "--include-partial-messages", "--model", providers.model_id("haiku"), "--tools", "", "--strict-mcp-config",
+             "--include-partial-messages", "--model", self.model, "--tools", "", "--strict-mcp-config",
              "--mcp-config", '{"mcpServers":{}}', "--disable-slash-commands", "--setting-sources", "",
              "--no-session-persistence", "--system-prompt-file", claude._fast_file("console_fast")],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1,
@@ -898,7 +899,8 @@ class _QuickSession:
         self.born = time.time()
 
     def ready(self) -> bool:
-        return self.p.poll() is None and time.time() - self.born < READY_MAX_AGE
+        from . import providers
+        return self.provider == providers.selected_id() and self.p.poll() is None and time.time() - self.born < READY_MAX_AGE
 
     def stream(self, text: str, timeout: float = 40):
         """Yields ('text', delta) as Haiku writes, then ('result', event)."""
@@ -1018,9 +1020,11 @@ def _quick(convo: str, on_text=None, on_ack=None, force_no: bool = False) -> dic
     finally:
         sess.close()
     u = ev.get("usage") or {}
-    db.record_call("claude", "console_fast", None, True, time.time() - t0, float(ev.get("total_cost_usd") or 0),
+    from . import providers
+    usd = providers.kimi_cost(sess.provider, u) if sess.provider in providers.KIMI else float(ev.get("total_cost_usd") or 0)
+    db.record_call("claude", "console_fast", None, True, time.time() - t0, usd,
                    u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0),
-                   u.get("output_tokens", 0), "haiku one-shot")
+                   u.get("output_tokens", 0), sess.model)
     verdict = verdict or buf.strip().split("\n", 1)[0].strip().upper()
     ok = (verdict.startswith("SI") or verdict.startswith("SÍ")) and not force_no
     rest = buf.split("\n", 1)[1].strip() if "\n" in buf else ""
@@ -1060,7 +1064,8 @@ def _step(name: str, inp: dict) -> str:
 
 def _follow(conv: str, sid: str, stop: threading.Event) -> None:
     """Tail the session transcript and publish each tool call as a step (Codex's live 'Ran …, Read …' line)."""
-    path, pos, seen = TRANSCRIPTS / f"{sid}.jsonl", 0, 0
+    from . import claude
+    path, pos, seen = claude._project_dir(str(DATA)) / f"{sid}.jsonl", 0, 0
     while not stop.wait(0.8):
         try:
             if not path.exists():

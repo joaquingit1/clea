@@ -41,9 +41,9 @@ def _system_file(lean: bool = False) -> str:
 
 
 def _streams() -> bool:
-    """Claude Code keeps a warm streaming session; another engine (Codex) answers each turn in one fast call."""
+    """Claude keeps a warm streaming session. Other models use the metered one-shot path."""
     from . import providers
-    return providers.engine() == "claude"
+    return providers.engine() == "claude" and providers.selected_id() not in providers.KIMI
 
 
 def _oneshot(text: str, lean: bool) -> str:

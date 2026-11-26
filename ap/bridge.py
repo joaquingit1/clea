@@ -28,7 +28,7 @@ def available() -> bool:
     says it has them (features.org_research); one that runs on an API key or on Codex has none, and a call would
     spend a model turn to find that out."""
     from . import providers
-    return site.feature("org_research") and providers.engine() == "claude"
+    return site.feature("org_research") and providers.engine() == "claude" and providers.selected_id() not in providers.KIMI
 
 
 def _mcp_calls(session_id: str) -> list[str]:
