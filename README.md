@@ -173,7 +173,7 @@ State is one SQLite file on your disk. More in [docs/how-it-works.md](docs/how-i
 
 ## Tested against a simulated workspace
 
-`make sim` runs 56 scripted scenarios against a simulated Slack and GitHub, covering what people write (bursts,
+`make sim` runs 57 scripted scenarios against a simulated Slack and GitHub, covering what people write (bursts,
 edits, threads answered by someone else, the same report in two channels, a draft approved, edited or declined) and
 what must be true afterwards. `python -m sim --live` runs eight scenarios with a real model, including a seeded bug
 that has to end as a draft pull request that fixes it. See [docs/simulator.md](docs/simulator.md).
