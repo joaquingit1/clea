@@ -335,7 +335,7 @@ class Sim:
         deadline = time.monotonic() + 370  # two 180s attempts, plus debounce
         while True:
             with impact._lock:
-                if not any(impact._pending.values()):
+                if not impact._pending:
                     return
             if time.monotonic() >= deadline:
                 raise TimeoutError("the live thread-news judge is still running; cannot reuse the scenario database")
